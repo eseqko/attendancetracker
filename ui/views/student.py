@@ -48,26 +48,26 @@ def render() -> None:
 
     grade = f" · Grade {row['grade']}" if pd.notna(row.get("grade")) else ""
     group = f" · {row['group']}" if pd.notna(row.get("group")) else ""
-    st.caption(f"ID {row['student_id']}{grade}{group}")
+    tier = components.TIER_DISPLAY.get(row["tier"], "–")
+    st.caption(f"ID {row['student_id']}{grade}{group} · Tier: **{tier}**")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4 = st.columns(4)
     rate = row["attendance_rate"]
     c1.metric("Attendance rate", f"{rate:.1%}" if pd.notna(rate) else "–")
-    c2.metric("Tier", components.TIER_DISPLAY.get(row["tier"], "–"))
     absent = row["days_absent"]
     breakdown = ""
     if pd.notna(row.get("days_excused")) and pd.notna(row.get("days_unexcused")):
         breakdown = f"{row['days_excused']:.0f} exc / {row['days_unexcused']:.0f} unexc"
-    c3.metric(
+    c2.metric(
         "Days absent",
         f"{absent:.0f}" if pd.notna(absent) else "–",
         delta=breakdown or None,
         delta_color="off",
     )
     tardy = row["days_tardy"]
-    c4.metric("Tardies", f"{tardy:.0f}" if pd.notna(tardy) else "–")
+    c3.metric("Tardies", f"{tardy:.0f}" if pd.notna(tardy) else "–")
     if pd.notna(row.get("current_streak")):
-        c5.metric(
+        c4.metric(
             "Absence streak",
             int(row["current_streak"]),
             delta=f"longest: {int(row['max_streak'])}",

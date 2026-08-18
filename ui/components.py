@@ -74,6 +74,8 @@ def display_metrics_table(metrics: pd.DataFrame) -> pd.DataFrame:
         table["mon_fri_flag"] = table["mon_fri_flag"].map(
             {True: "⚑ Mon/Fri", False: ""}
         )
+    if "group" in table:
+        table["group"] = table["group"].fillna("")
     return table
 
 
