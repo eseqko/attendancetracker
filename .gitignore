@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Student data guard: tabular data files are never committed, anywhere in the repo.
+# Real caseload/attendance exports must stay out of version control.
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.xlsm
+data/
+sample_data/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
