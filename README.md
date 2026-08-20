@@ -36,11 +36,31 @@ streamlit run app.py
 
 Your browser opens the app. Start on **Upload & Setup**.
 
+## Caseload file format
+
+Use the district caseload template: an Excel file whose **first row is the header row** with
+these fields:
+
+| # | Header field | What the tracker does with it |
+|---|--------------|-------------------------------|
+| 1 | `Student Name` | display name ("Last, First") |
+| 2 | `Perm ID` | **required — the matching key.** Must be the same student ID your attendance report uses |
+| 3 | `Ed-Fi ID` | kept for reference; never used for matching |
+| 4 | `State ID` | kept for reference; never used for matching |
+| 5 | `Legal Last Name` | name fallback when `Student Name` is blank |
+| 6 | `Legal First Name` | name fallback when `Student Name` is blank |
+| 7 | `Grade` | powers the by-grade cohort comparison and grade filters — add this column to your export |
+
+One row per student below the header. `Perm ID` is the only strictly required field — a file
+with just that column still works — but include the rest (especially `Grade`) to get names and
+grade-level analyses. Any additional columns you add (case manager, program, …) are kept and
+become group-by options on the Cohorts page. The setup wizard always shows you which column it
+mapped to which field so you can correct it before anything is computed.
+
 ## Usage
 
-1. **Upload your caseload** (CSV or Excel): any file with a student ID column; name and grade
-   columns are used if present. Extra columns (e.g. case manager, program) become group-by
-   options on the Cohorts page.
+1. **Upload your caseload** (CSV or Excel) in the template format above. Extra columns (e.g.
+   case manager, program) become group-by options on the Cohorts page.
 2. **Upload the attendance report** (CSV or Excel). The app auto-detects the report's shape —
    one row per student-day, a per-student summary, or period-by-period — and asks you to confirm
    the column mapping. Header rows buried under title/preamble lines are detected automatically.
