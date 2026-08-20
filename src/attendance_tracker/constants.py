@@ -175,6 +175,10 @@ AMBIGUOUS_CODES = frozenset({"ISS"})
 
 #: Column roles the detector can assign. Values are synonym fragments matched
 #: against normalized header names (lowercased, punctuation stripped).
+#: Each list is PREFERENCE-ORDERED: when several columns match the same role,
+#: the column matching the earlier synonym wins (e.g. 'Perm ID' beats
+#: 'State ID' for student_id — Perm ID is the SIS-local ID that attendance
+#: reports key on).
 ROLE_SYNONYMS: dict[str, list[str]] = {
     "student_id": [
         "student id", "studentid", "student number", "student no", "stu id",

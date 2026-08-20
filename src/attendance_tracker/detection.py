@@ -75,6 +75,34 @@ def _name_score(header_norm: str, synonym: str) -> int:
     return 0
 
 
+def _name_evidence(header_norm: str, synonyms: list[str]) -> tuple[int, int, int] | None:
+    """Best (tier, synonym_index, length) for a header against one role's
+    synonym list, or None when nothing matches.
+
+    Tier 2 = exact match, 1 = whole-word-phrase containment. When several
+    columns exact-match the same role, the SYNONYM LIST ORDER decides which
+    column wins — the lists in constants.ROLE_SYNONYMS are preference-ordered,
+    e.g. a caseload with 'Perm ID', 'State ID', and 'Ed-Fi ID' columns maps
+    student_id to 'Perm ID' (the SIS-local ID attendance reports use).
+    """
+    best: tuple[int, int, int] | None = None
+    for index, synonym in enumerate(synonyms):
+        score = _name_score(header_norm, synonym)
+        if not score:
+            continue
+        if score >= _EXACT_SCORE:
+            tier, length = 2, score - _EXACT_SCORE
+        else:
+            tier, length = 1, score - _PHRASE_SCORE
+        candidate = (tier, -index, length)
+        if best is None or candidate > best:
+            best = candidate
+    if best is None:
+        return None
+    tier, negative_index, length = best
+    return tier, -negative_index, length
+
+
 # ---------------------------------------------------------------------------
 # Value evidence
 # ---------------------------------------------------------------------------
@@ -163,22 +191,24 @@ def infer_roles(frame: pd.DataFrame, roles: list[str]) -> dict[str, str]:
     when the header gave nothing away and exactly one column fits.
     """
     columns = list(frame.columns)
-    candidates: list[tuple[int, int, int, str, object]] = []
+    candidates: list[tuple[int, int, int, int, int, str, object]] = []
     for role_index, role in enumerate(roles):
         synonyms = ROLE_SYNONYMS.get(role, [])
         for column_index, column in enumerate(columns):
             header_norm = _normalize_header(str(column))
-            score = max(
-                (_name_score(header_norm, synonym) for synonym in synonyms),
-                default=0,
-            )
-            if score:
-                candidates.append((score, role_index, column_index, role, column))
-    candidates.sort(key=lambda entry: (-entry[0], entry[1], entry[2]))
+            evidence = _name_evidence(header_norm, synonyms)
+            if evidence is not None:
+                tier, synonym_index, length = evidence
+                candidates.append(
+                    (tier, synonym_index, length, role_index, column_index, role, column)
+                )
+    # Higher tier first; within a tier, earlier (preferred) synonym first,
+    # then longer (more specific) synonym, then role/column order.
+    candidates.sort(key=lambda entry: (-entry[0], entry[1], -entry[2], entry[3], entry[4]))
 
     mapping: dict[str, object] = {}
     used: set[object] = set()
-    for score, _, _, role, column in candidates:
+    for _, _, _, _, _, role, column in candidates:
         if role in mapping or column in used:
             continue
         mapping[role] = column

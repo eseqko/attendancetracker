@@ -223,6 +223,41 @@ def _full_name(roster: pd.DataFrame) -> pd.Series:
     return roster["last_name"] + ", " + roster["first_name"]
 
 
+#: Header row of the district caseload template (Synergy QRY801-style export).
+#: 'Perm ID' is the SIS-local student ID that attendance reports key on;
+#: 'Ed-Fi ID' and 'State ID' are other ID systems and must NOT be used for
+#: matching by default.
+CASELOAD_TEMPLATE_COLUMNS = [
+    "Student Name", "Perm ID", "Ed-Fi ID", "State ID",
+    "Legal Last Name", "Legal First Name", "Grade",
+]
+CASELOAD_TEMPLATE_SHEET = "QRY801"
+
+
+def render_caseload_template(roster: pd.DataFrame) -> pd.DataFrame:
+    """Caseload in the district template format (CASELOAD_TEMPLATE_COLUMNS).
+
+    Ed-Fi and State IDs are synthetic and deliberately different from Perm ID
+    so tests can prove the matcher never picks them up.
+    """
+    caseload = roster[roster["on_caseload"]].reset_index(drop=True)
+    return pd.DataFrame(
+        {
+            "Student Name": caseload["last_name"] + ", " + caseload["first_name"],
+            "Perm ID": caseload["student_id"],
+            "Ed-Fi ID": pd.array(
+                [f"{550001 + i}" for i in range(len(caseload))], dtype="string"
+            ),
+            "State ID": pd.array(
+                [f"{7700000001 + i}" for i in range(len(caseload))], dtype="string"
+            ),
+            "Legal Last Name": caseload["last_name"],
+            "Legal First Name": caseload["first_name"],
+            "Grade": caseload["grade"],
+        }
+    )
+
+
 def render_caseload(roster: pd.DataFrame, leading_zeros: bool = False) -> pd.DataFrame:
     """The user's caseload file: one row per caseload student."""
     caseload = roster[roster["on_caseload"]]
@@ -355,6 +390,7 @@ def build_dataset(
         "daily_events": daily_events,
         "summary": summary,
         "caseload": render_caseload(roster),
+        "caseload_template": render_caseload_template(roster),
         "caseload_leading_zeros": render_caseload(roster, leading_zeros=True),
         "report_daily": render_daily_report(roster, daily_events, seed=seed),
         "report_daily_absences_only": render_daily_report(
@@ -389,6 +425,11 @@ def write_demo_files(outdir: str | Path, seed: int = 42) -> list[Path]:
             written.append(xlsx_path)
 
     save(data["caseload"], "caseload")
+    template_path = outdir / "caseload_template.xlsx"
+    data["caseload_template"].to_excel(
+        template_path, index=False, sheet_name=CASELOAD_TEMPLATE_SHEET
+    )
+    written.append(template_path)
     save(data["caseload_leading_zeros"], "caseload_leading_zeros", xlsx=False)
     save(
         with_preamble(data["caseload"], PREAMBLE_LINES),

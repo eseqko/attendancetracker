@@ -171,8 +171,10 @@ def _caseload_section() -> bool:
     data, filename = _uploaded_file(
         "caseload",
         "Caseload file (CSV or Excel)",
-        "Your list of students. Needs a student ID column; name and grade are "
-        "used when present. Extra columns become group-by options.",
+        "Use the caseload template — header row: Student Name, Perm ID, "
+        "Ed-Fi ID, State ID, Legal Last Name, Legal First Name, Grade. "
+        "Perm ID is what gets matched against the attendance report. Extra "
+        "columns become group-by options.",
     )
     if data is None:
         st.info(

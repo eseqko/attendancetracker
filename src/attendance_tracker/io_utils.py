@@ -194,7 +194,11 @@ def load_table(
             skip_blank_lines=False,
             dtype=str,
         )
-    frame = frame.dropna(axis=0, how="all").dropna(axis=1, how="all")
+    frame = frame.dropna(axis=0, how="all")
+    if len(frame) > 0:
+        # A header-only file (e.g. a blank template) must keep its columns:
+        # with zero data rows every column is vacuously all-NA.
+        frame = frame.dropna(axis=1, how="all")
     frame.columns = [str(column).strip() for column in frame.columns]
     frame = frame.reset_index(drop=True)
     return frame, header_row
