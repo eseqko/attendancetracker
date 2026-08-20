@@ -51,7 +51,7 @@ def _attribute_display(frame: pd.DataFrame) -> pd.DataFrame:
 
 def render() -> None:
     bundle = state.bundle()
-    st.title("🧮 Breakdowns")
+    st.title("Breakdowns")
     st.caption(
         "Caseload absences sliced every way the uploaded files allow. "
         "Every table has a CSV download."

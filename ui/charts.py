@@ -13,17 +13,17 @@ import plotly.graph_objects as go
 
 from attendance_tracker.constants import TIER_LABELS, TIER_ORDER, Tier
 
-# Ink & chrome (light surface)
-INK = "#0b0b0b"
-INK_SECONDARY = "#52514e"
-MUTED = "#898781"
-GRID = "#e1e0d9"
-AXIS = "#c3c2b7"
+# Ink & chrome (light surface, Apple-neutral)
+INK = "#1d1d1f"
+INK_SECONDARY = "#6e6e73"
+MUTED = "#86868b"
+GRID = "#e8e8ed"
+AXIS = "#d2d2d7"
 
 # Series roles
-BLUE = "#2a78d6"  # primary measure
-BLUE_LIGHT = "#86b6ef"  # secondary line (rolling average)
-BASELINE_GRAY = "#a9a8a1"  # schoolwide reference
+BLUE = "#0071e3"  # primary measure (accent)
+BLUE_LIGHT = "#8ec0f2"  # secondary line (rolling average)
+BASELINE_GRAY = "#aeaeb2"  # schoolwide reference
 
 # Status palette — tiers are states (good/warning/serious/critical)
 TIER_COLORS: dict[str, str] = {
@@ -35,7 +35,7 @@ TIER_COLORS: dict[str, str] = {
 
 # Calendar day statuses — states; present recedes toward the surface
 DAY_STATUS_COLORS: dict[str, str] = {
-    "present": "#e7ebe4",
+    "present": "#eceef1",
     "tardy": "#fab219",
     "partial": "#f6c6ae",
     "absent_excused": "#ec835a",
@@ -51,7 +51,10 @@ DAY_STATUS_LABELS: dict[str, str] = {
 
 WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
-FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+FONT = (
+    '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, '
+    '"Helvetica Neue", Arial, sans-serif'
+)
 
 
 def _base_layout(fig: go.Figure, height: int = 320) -> go.Figure:
@@ -59,7 +62,7 @@ def _base_layout(fig: go.Figure, height: int = 320) -> go.Figure:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=FONT, color=INK_SECONDARY, size=13),
-        margin=dict(l=8, r=8, t=8, b=8),
+        margin=dict(l=8, r=8, t=16, b=8),
         height=height,
         hoverlabel=dict(font_family=FONT),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
@@ -250,7 +253,7 @@ def category_stack_bars(frame: pd.DataFrame, label_col: str) -> go.Figure:
                 name=CATEGORY_MEASURE_LABELS[measure],
                 marker=dict(
                     color=CATEGORY_MEASURE_COLORS[measure],
-                    line=dict(color="rgba(252,252,251,1)", width=2),
+                    line=dict(color="#ffffff", width=2),
                 ),
                 hovertemplate="%{x} — "
                 + CATEGORY_MEASURE_LABELS[measure]
@@ -331,7 +334,7 @@ def tier_mix_stacked(group_frame: pd.DataFrame, label_col: str) -> go.Figure:
                 name=TIER_LABELS[tier],
                 marker=dict(
                     color=TIER_COLORS[tier.value],
-                    line=dict(color="rgba(252,252,251,1)", width=2),
+                    line=dict(color="#ffffff", width=2),
                 ),
                 hovertemplate="%{x} — " + TIER_LABELS[tier] + ": %{y}<extra></extra>",
             )

@@ -632,6 +632,17 @@ def _finish_section() -> None:
         help="Recommended: treats 004512 and 4512 as the same student. Turn "
         "off only if your school's IDs really differ by leading zeros.",
     )
+    assume_perfect = False
+    if shape == Shape.PERIOD_WIDE:
+        assume_perfect = st.toggle(
+            "Count students with no attendance marks as perfect attendance",
+            value=True,
+            key="assume_perfect",
+            help="This kind of report only lists days with marks, so a "
+            "student with flawless attendance never appears in it at all. "
+            "Review the list below to make sure it isn't an ID mismatch; "
+            "turn this off to treat them as unmatched instead.",
+        )
     report_ids = normalize.normalize_id_series(
         frame[mapping.columns["student_id"]]
     ).dropna()
@@ -640,22 +651,32 @@ def _finish_section() -> None:
 
     matched = int(join.students["matched"].sum())
     total = len(join.students)
+    missing = total - matched
+    unmatched_display = join.unmatched.rename(
+        columns={"student_id": "Student ID", "name": "Name", "hint": "Hint"}
+    )
     if matched == 0:
         st.error(
             "None of your caseload students were found in the report. Check "
             "that both files use the same student-ID system."
         )
-    elif matched < total:
+        if not join.unmatched.empty:
+            st.dataframe(unmatched_display, hide_index=True)
+    elif missing and assume_perfect:
+        st.success(
+            f"All **{total}** caseload students accounted for — {matched} "
+            f"with attendance marks, {missing} with none (counted as "
+            "perfect attendance)."
+        )
+        with st.expander(f"Review the {missing} perfect-attendance student(s)"):
+            st.dataframe(
+                unmatched_display[["Student ID", "Name"]], hide_index=True
+            )
+    elif missing:
         st.warning(f"**{matched} of {total}** caseload students matched.")
+        st.dataframe(unmatched_display, hide_index=True)
     else:
         st.success(f"All **{total}** caseload students were found in the report.")
-    if not join.unmatched.empty:
-        st.dataframe(
-            join.unmatched.rename(
-                columns={"student_id": "Student ID", "name": "Name", "hint": "Hint"}
-            ),
-            hide_index=True,
-        )
     st.caption(
         f"Schoolwide baseline will be computed from "
         f"{join.report_only_count + matched:,} students in the report."
@@ -708,6 +729,7 @@ def _finish_section() -> None:
                 absent_day_threshold=threshold,
                 enrolled_override=enrolled_override,
                 prebuilt_students=students,
+                assume_perfect_attendance=assume_perfect and matched > 0,
                 course_frame=state.get_setup("course_frame"),
                 course_mapping=state.get_setup("course_mapping"),
             )
@@ -722,7 +744,7 @@ def _finish_section() -> None:
 
 
 def render() -> None:
-    st.title("📥 Upload & Setup")
+    st.title("Upload & Setup")
     st.caption(
         "Everything runs locally and stays in memory — uploaded student data "
         "is never written to disk or sent anywhere."

@@ -26,6 +26,7 @@ def assemble_bundle(
     prebuilt_students: pd.DataFrame | None = None,
     course_frame: pd.DataFrame | None = None,
     course_mapping: ColumnMapping | None = None,
+    assume_perfect_attendance: bool = False,
 ) -> tuple[DataBundle, list[str]]:
     """Build the complete DataBundle. Returns (bundle, warnings).
 
@@ -33,6 +34,11 @@ def assemble_bundle(
     students frame via prebuilt_students (the setup wizard builds it early so
     its warnings surface in section 1). An optional course-context report
     (course_frame + course_mapping) adds by-course/teacher/counselor data.
+
+    assume_perfect_attendance (wide/exception reports only): caseload students
+    with no marks anywhere in the report are counted as matched with perfect
+    attendance instead of listed as unmatched — the user opts in after
+    verifying those students really are absence-free.
 
     The schoolwide report is parsed in full so the baseline reflects the whole
     school; non-caseload rows are dropped right after the baseline is computed.
@@ -47,6 +53,7 @@ def assemble_bundle(
         absent_day_threshold,
         enrolled_override,
         prebuilt_students,
+        assume_perfect_attendance,
     )
     if course_frame is not None and course_mapping is not None:
         _attach_course_context(
@@ -87,6 +94,7 @@ def _assemble_primary(
     absent_day_threshold: float = DEFAULT_ABSENT_DAY_THRESHOLD,
     enrolled_override: int | None = None,
     prebuilt_students: pd.DataFrame | None = None,
+    assume_perfect_attendance: bool = False,
 ) -> tuple[DataBundle, list[str]]:
     warnings: list[str] = []
 
@@ -136,6 +144,7 @@ def _assemble_primary(
             absent_day_threshold,
             enrolled_override,
             warnings,
+            assume_perfect_attendance,
         )
 
     all_events, w = normalize.build_events(report_frame, report_mapping, code_map)
@@ -184,6 +193,7 @@ def _assemble_period_wide(
     absent_day_threshold: float,
     enrolled_override: int | None,
     warnings: list[str],
+    assume_perfect_attendance: bool = False,
 ) -> tuple[DataBundle, list[str]]:
     """Assembly for wide period reports (ATP201-style exception reports).
 
@@ -227,8 +237,22 @@ def _assemble_period_wide(
     )
     warnings.extend(join.warnings)
     events = joining.apply_id_map(all_events, join.id_map)
+
+    students_frame = join.students
+    unmatched = join.unmatched
+    if assume_perfect_attendance and not unmatched.empty:
+        # User-verified: caseload students with no marks anywhere in the
+        # exception report are absence-free, not missing.
+        students_frame = students_frame.copy()
+        students_frame["matched"] = True
+        warnings.append(
+            f"{len(unmatched)} caseload student(s) have no attendance marks "
+            "in the report and are counted as perfect attendance."
+        )
+        unmatched = unmatched.iloc[0:0]
+
     matched_ids = (
-        join.students.loc[join.students["matched"], "student_id"]
+        students_frame.loc[students_frame["matched"], "student_id"]
         .astype(str)
         .tolist()
     )
@@ -241,7 +265,7 @@ def _assemble_period_wide(
     )
     metrics_frame = metrics.metrics_from_events(
         events,
-        join.students,
+        students_frame,
         absent_day_threshold=absent_day_threshold,
         enrolled_override=enrolled_override,
         day_status=day_status,
@@ -249,10 +273,10 @@ def _assemble_period_wide(
         period_sessions=len(calendar),
     )
     bundle = DataBundle(
-        students=join.students,
+        students=students_frame,
         metrics=metrics_frame,
         baseline=baseline,
-        unmatched=join.unmatched,
+        unmatched=unmatched,
         capabilities=SHAPE_CAPABILITIES[Shape.PERIOD_WIDE],
         events=events,
         day_status=day_status,

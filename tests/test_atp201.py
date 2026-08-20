@@ -122,7 +122,7 @@ def test_densify_day_collapse_and_missing_days():
     assert int(by_student.loc["903", "days_absent"]) == 0
 
 
-def _assemble(dataset, as_xlsx_bytes, school_days):
+def _assemble(dataset, as_xlsx_bytes, school_days, **kwargs):
     report_frame, report_result = _detect(dataset, as_xlsx_bytes)
     caseload_frame, caseload_result = detection.detect_caseload(
         as_xlsx_bytes(dataset["caseload_template"]), "caseload.xlsx"
@@ -138,6 +138,7 @@ def _assemble(dataset, as_xlsx_bytes, school_days):
         ),
         code_map=codes_mod.propose_code_map(report_result.observed_codes),
         enrolled_override=school_days,
+        **kwargs,
     )
 
 
@@ -169,6 +170,34 @@ def test_end_to_end_matches_simulator_truth(small_dataset, as_xlsx_bytes):
         assert int(row["days_tardy"]) == int((truth == "T").sum())
         assert int(row["days_enrolled"]) == n_days
         assert pd.notna(row["tier"])
+
+
+def test_assume_perfect_attendance_counts_no_mark_students(
+    small_dataset, as_xlsx_bytes
+):
+    n_days = len(small_dataset["calendar"])
+    bundle, warnings = _assemble(
+        small_dataset, as_xlsx_bytes, n_days, assume_perfect_attendance=True
+    )
+    assert bundle.unmatched.empty
+    assert bundle.metrics["matched"].all()
+
+    marked_students = set(
+        small_dataset["report_atp201"]["Sis Number"].astype(str)
+    )
+    metrics_frame = bundle.metrics.set_index("student_id")
+    perfect = [
+        sid for sid in metrics_frame.index if sid not in marked_students
+    ]
+    for student_id in perfect:
+        row = metrics_frame.loc[student_id]
+        assert int(row["days_absent"]) == 0
+        assert int(row["days_tardy"]) == 0
+        assert int(row["days_enrolled"]) == n_days
+        assert row["tier"] == "satisfactory"
+        assert float(row["attendance_rate"]) == 1.0
+    if perfect:
+        assert any("perfect attendance" in w for w in warnings)
 
 
 def test_period_skipper_flagged_from_wide_report(demo_dataset, as_xlsx_bytes):
