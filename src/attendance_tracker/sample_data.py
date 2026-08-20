@@ -347,6 +347,19 @@ def render_period_report(
 #: Letter code -> ATP201 period-cell word.
 ATP201_CODE_WORDS = {"A": "Unverified", "E": "Ilness", "T": "Unx.Tardy"}
 ATP201_SUFFIX_BY_WEEKDAY = {0: "MFonly", 1: "D2S", 2: "W2122", 3: "D2S", 4: "MFonly"}
+FAKE_ETHNICITIES = ["Hispanic", "White", "Asian", "Black", "Declined to state"]
+FAKE_GENDERS = ["F", "M", "X"]
+
+#: Fake course + teacher per simulated period, for the course-context report.
+FAKE_COURSES = {
+    1: ("English 9", "Riley Reader"),
+    2: ("Algebra I", "Morgan Mathers"),
+    3: ("Biology", "Sam Science"),
+    4: ("World History", "Harper Historian"),
+    5: ("PE", "Casey Coach"),
+    6: ("Art", "Alex Artiste"),
+    7: ("Study Skills", "Jordan Guide"),
+}
 
 
 def render_atp201_report(
@@ -379,7 +392,7 @@ def render_atp201_report(
             "Legal Formatted Name": f"{info['last_name']}, {info['first_name']}",
             "Nick Name": str(info["first_name"]),
             "Last Name Goes By": str(info["last_name"]),
-            "Ethnicity": "Declined to state",
+            "Ethnicity": FAKE_ETHNICITIES[int(student_id) % len(FAKE_ETHNICITIES)],
             "Original Enter Date": None,
             "Final Withdrawal Date": None,
             "Sis Number": str(student_id),
@@ -396,7 +409,7 @@ def render_atp201_report(
             {
                 "Note": None,
                 "Birth Date": "01/15/2012",
-                "Gender": "X",
+                "Gender": FAKE_GENDERS[int(student_id) % len(FAKE_GENDERS)],
                 "Phone": "555-0100",
                 "Home Language": "English",
                 "Home Address": "1 Example St",
@@ -417,6 +430,44 @@ def render_atp201_report(
             }
         )
         rows.append(record)
+    return pd.DataFrame(rows)
+
+
+def render_course_context(
+    roster: pd.DataFrame, period_events: pd.DataFrame
+) -> pd.DataFrame:
+    """ATC-style course-context report: one row per student x course section,
+    one count column per attendance code, plus a Total Absences column that
+    follows the district's rules (present-like ACT/OFF excluded)."""
+    names = roster.set_index("student_id")
+    marks = period_events[period_events["code"] != "P"]
+    counts = (
+        marks.groupby(["student_id", "period", "code"], observed=True)
+        .size()
+        .unstack("code", fill_value=0)
+        .reindex(columns=["A", "E", "T"], fill_value=0)
+        .reset_index()
+    )
+    rows: list[dict[str, object]] = []
+    for record in counts.itertuples(index=False):
+        info = names.loc[record.student_id]
+        course, teacher = FAKE_COURSES[int(record.period)]
+        rows.append(
+            {
+                "Student ID": str(record.student_id),
+                "First Name": str(info["first_name"]),
+                "Last Name": str(info["last_name"]),
+                "Counselor Name": str(info["case_manager"]),
+                "Course Title": course,
+                "Section ID": f"{record.period}-101",
+                "Teacher Name": teacher,
+                "UNV - (Unverified)": int(record.A),
+                "ILL - (Excused)": int(record.E),
+                "UTY - (Unexcused Tardy)": int(record.T),
+                "ACT - (Excused)": 0,
+                "Total Absences": int(record.A) + int(record.E),
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -482,6 +533,7 @@ def build_dataset(
         "report_summary": render_summary_report(roster, summary),
         "report_period": render_period_report(roster, period_events),
         "report_atp201": render_atp201_report(roster, period_events),
+        "report_course_context": render_course_context(roster, period_events),
     }
 
 
@@ -528,4 +580,5 @@ def write_demo_files(outdir: str | Path, seed: int = 42) -> list[Path]:
     atp201_path = outdir / "report_atp201.xlsx"
     data["report_atp201"].to_excel(atp201_path, index=False)
     written.append(atp201_path)
+    save(data["report_course_context"], "report_course_context", xlsx=False)
     return written

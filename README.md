@@ -7,6 +7,10 @@ focuses on *your* students, and analyzes:
 
 - **Watch-list & tiers** — chronic-absenteeism tiers (satisfactory / at-risk / chronic / severe)
   with a sortable, filterable watch-list.
+- **Breakdowns** — absences sliced by every dimension the uploads allow: day of week, month,
+  period, attendance code, grade, race/ethnicity, gender, custom groups, any extra caseload
+  column — and by course, teacher, and counselor when the optional course-context report is
+  attached. Every table downloads as CSV.
 - **Individual trends** — per-student calendar heatmap, weekly attendance-rate trend
   (improving / stable / declining), absence & tardy history.
 - **Cohorts** — your caseload vs. the schoolwide baseline, by grade, or by custom groups you assign.
@@ -79,7 +83,13 @@ Four layouts are auto-detected (and always confirmed by you before anything is c
    of school days so far; unlisted days count as present, and a caseload student with no marks
    at all shows as unmatched — that usually just means perfect attendance. Following the
    district's own counting rules, `Activity` and `Office Ex` are treated as present-like, and
-   tardies never count as absences.
+   tardies never count as absences. `Ethnicity` and `Gender` columns are used (only) as
+   breakdown dimensions when present.
+
+**Optional course-context report**: the per-class export with one row per student per course
+section and one count column per code (`CUT - (Unexcused)`, `ILL - (Excused)`, …, plus
+`Student ID`, `Course Title`, `Section ID`, `Teacher Name`, `Counselor Name`). Uploading it in
+setup unlocks the by-course, by-teacher, and by-counselor breakdowns.
 
 ## Usage
 

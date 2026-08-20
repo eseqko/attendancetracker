@@ -240,7 +240,32 @@ ROLE_SYNONYMS: dict[str, list[str]] = {
         "pct present", "percent present", "attendance %", "att %", "%", "rate",
         "pct", "percent",
     ],
+    "ethnicity": ["ethnicity", "race ethnicity", "race"],
+    "gender": ["gender", "sex"],
+    # course-context (ATC-style) files
+    "course": ["course title", "course name", "course", "class"],
+    "section": ["section id", "section"],
+    "teacher": ["teacher name", "teacher"],
+    "counselor": ["counselor name", "counselor", "case manager"],
 }
+
+#: Per-student attribute roles carried through events/students frames for
+#: demographic breakdowns. In-memory only, like all student data.
+ATTRIBUTE_ROLES = ["ethnicity", "gender"]
+
+#: Category suffix of an ATC-style code-count header ('CUT - (Unexcused)').
+COURSE_HEADER_CATEGORIES: dict[str, Category] = {
+    "excused": Category.ABSENT_EXCUSED,
+    "unexcused": Category.ABSENT_UNEXCUSED,
+    "unverified": Category.ABSENT_UNEXCUSED,
+    "positive": Category.OTHER_PRESENT,
+    "excused tardy": Category.TARDY,
+    "unexcused tardy": Category.TARDY,
+}
+
+#: Codes whose ATC counts are excluded from 'Total Absences' by the district
+#: despite an '(Excused)' label — verified against the report's own totals.
+COURSE_PRESENT_LIKE_CODES = frozenset({"ACT", "OFF"})
 
 #: Roles a report must map for each shape (beyond these, more is optional).
 REQUIRED_ROLES: dict[Shape, list[str]] = {

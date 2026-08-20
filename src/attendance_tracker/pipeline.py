@@ -24,16 +24,70 @@ def assemble_bundle(
     absent_day_threshold: float = DEFAULT_ABSENT_DAY_THRESHOLD,
     enrolled_override: int | None = None,
     prebuilt_students: pd.DataFrame | None = None,
+    course_frame: pd.DataFrame | None = None,
+    course_mapping: ColumnMapping | None = None,
 ) -> tuple[DataBundle, list[str]]:
     """Build the complete DataBundle. Returns (bundle, warnings).
 
     Pass either a raw caseload frame + mapping, or an already-canonical
     students frame via prebuilt_students (the setup wizard builds it early so
-    its warnings surface in section 1).
+    its warnings surface in section 1). An optional course-context report
+    (course_frame + course_mapping) adds by-course/teacher/counselor data.
 
     The schoolwide report is parsed in full so the baseline reflects the whole
     school; non-caseload rows are dropped right after the baseline is computed.
     """
+    bundle, warnings = _assemble_primary(
+        report_frame,
+        report_mapping,
+        caseload_frame,
+        caseload_mapping,
+        code_map,
+        force_exact,
+        absent_day_threshold,
+        enrolled_override,
+        prebuilt_students,
+    )
+    if course_frame is not None and course_mapping is not None:
+        _attach_course_context(
+            bundle, course_frame, course_mapping, force_exact, warnings
+        )
+    return bundle, warnings
+
+
+def _attach_course_context(
+    bundle: DataBundle,
+    course_frame: pd.DataFrame,
+    course_mapping: ColumnMapping,
+    force_exact: bool,
+    warnings: list[str],
+) -> None:
+    """Join an ATC-style course/teacher report onto the caseload and store the
+    tidy marks on the bundle (course/teacher/counselor breakdowns)."""
+    marks, w = normalize.build_course_marks(course_frame, course_mapping)
+    warnings.extend(w)
+    context_join = joining.join_caseload(
+        bundle.students, marks["student_id"], force_exact=force_exact
+    )
+    bundle.course_marks = joining.apply_id_map(marks, context_join.id_map)
+    covered = int(context_join.students["matched"].sum())
+    warnings.append(
+        f"Course-context report covers {covered} of {len(bundle.students)} "
+        "caseload students."
+    )
+
+
+def _assemble_primary(
+    report_frame: pd.DataFrame,
+    report_mapping: ColumnMapping,
+    caseload_frame: pd.DataFrame | None = None,
+    caseload_mapping: ColumnMapping | None = None,
+    code_map: CodeMap | None = None,
+    force_exact: bool = False,
+    absent_day_threshold: float = DEFAULT_ABSENT_DAY_THRESHOLD,
+    enrolled_override: int | None = None,
+    prebuilt_students: pd.DataFrame | None = None,
+) -> tuple[DataBundle, list[str]]:
     warnings: list[str] = []
 
     if prebuilt_students is not None:

@@ -12,9 +12,13 @@ from attendance_tracker import detection, metrics, normalize, pipeline
 from attendance_tracker.constants import Capability, Category, Shape
 from attendance_tracker.model import CodeMap, ColumnMapping
 
+#: Analysis columns events may carry — ethnicity/gender are deliberate
+#: breakdown dimensions; contact/address/birth columns must NEVER survive.
 CANONICAL_EVENT_COLUMNS = {
     "student_id", "date", "period", "code", "category", "name", "grade",
+    "ethnicity", "gender",
 }
+BANNED_COLUMN_WORDS = ("birth", "phone", "address", "parent", "zip", "custody")
 
 
 def _detect(dataset, as_xlsx_bytes):
@@ -45,8 +49,11 @@ def test_wide_events_strip_suffixes_and_drop_pii(small_dataset, as_xlsx_bytes):
     mapping = ColumnMapping(shape=Shape.PERIOD_WIDE, columns=result.mapping)
     events, warnings = normalize.build_events_wide(frame, mapping, code_map)
 
-    # Privacy containment: nothing beyond the canonical columns survives.
+    # Privacy containment: nothing beyond the canonical columns survives,
+    # and contact/demographic-record columns are gone by name.
     assert set(events.columns) <= CANONICAL_EVENT_COLUMNS
+    for column in events.columns:
+        assert not any(word in column.lower() for word in BANNED_COLUMN_WORDS)
     # '(D2S)'-style suffixes never break date parsing.
     assert events["date"].notna().all()
     truth_dates = set(small_dataset["daily_events"]["date"])

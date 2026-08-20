@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .constants import Shape
+from .constants import ATTRIBUTE_ROLES, Shape
 from .model import CodeMap, ColumnMapping
 
 
@@ -123,6 +123,10 @@ def build_students(
     else:
         out["grade"] = _na_string_column(frame.index)
 
+    for role in ATTRIBUTE_ROLES:
+        if role in cols:
+            out[role] = _string_column(frame[cols[role]])
+
     out["group"] = _na_string_column(frame.index)
 
     mapped_sources = set(cols.values())
@@ -178,7 +182,7 @@ def build_events(
         lambda c: code_map.category_for(c).value, na_action="ignore"
     ).astype("string")
 
-    for role in ("name", "grade"):
+    for role in ("name", "grade", *ATTRIBUTE_ROLES):
         if role in cols:
             out[role] = _string_column(frame[cols[role]])
 
@@ -232,7 +236,7 @@ def build_events_wide(
         .astype("datetime64[ns]")
         .dt.normalize()
     )
-    for role in ("name", "grade"):
+    for role in ("name", "grade", *ATTRIBUTE_ROLES):
         if role in cols:
             base[role] = _string_column(frame[cols[role]])
 
@@ -253,7 +257,7 @@ def build_events_wide(
         pieces.append(piece)
 
     columns_order = ["student_id", "date", "period", "code", "category"] + [
-        role for role in ("name", "grade") if role in cols
+        role for role in ("name", "grade", *ATTRIBUTE_ROLES) if role in cols
     ]
     if pieces:
         out = pd.concat(pieces)[columns_order]
@@ -270,6 +274,64 @@ def build_events_wide(
         out = out.loc[~bad_dates]
 
     return out.sort_values(["student_id", "date"]).reset_index(drop=True), warnings
+
+
+def build_course_marks(
+    frame: pd.DataFrame, mapping: ColumnMapping
+) -> tuple[pd.DataFrame, list[str]]:
+    """Build tidy course marks from an ATC-style course-context report.
+
+    Input: one row per student x course section with one count column per
+    attendance code ('CUT - (Unexcused)', ...). Output: one row per
+    (student, course, code) with count > 0 — columns student_id, course,
+    section, teacher, counselor (string, pd.NA where unmapped), code,
+    category, count (int64). The code's category comes from its own header
+    label, with the district's ACT/OFF present-like exception applied.
+    Identity/demographic columns beyond these never survive.
+    """
+    from .detection import course_code_columns  # function-level: avoids a cycle
+
+    warnings: list[str] = []
+    code_columns = course_code_columns(frame)
+    if not code_columns:
+        raise ValueError("no 'CODE - (Category)' columns found")
+    cols = mapping.columns
+
+    base = pd.DataFrame(index=frame.index)
+    base["student_id"] = normalize_id_series(frame[cols["student_id"]])
+    for role in ("course", "section", "teacher", "counselor"):
+        if role in cols:
+            base[role] = _string_column(frame[cols[role]])
+        else:
+            base[role] = _na_string_column(frame.index)
+
+    pieces: list[pd.DataFrame] = []
+    for column, code, category in code_columns:
+        counts = pd.to_numeric(frame[column], errors="coerce").fillna(0)
+        positive = counts > 0
+        if not positive.any():
+            continue
+        piece = base.loc[positive].copy()
+        piece["code"] = pd.array([code] * len(piece), dtype="string")
+        piece["category"] = pd.array([category] * len(piece), dtype="string")
+        piece["count"] = counts.loc[positive].astype("int64")
+        pieces.append(piece)
+
+    columns_order = [
+        "student_id", "course", "section", "teacher", "counselor", "code",
+        "category", "count",
+    ]
+    if pieces:
+        out = pd.concat(pieces)[columns_order]
+    else:
+        out = base.iloc[0:0].reindex(columns=columns_order)
+        warnings.append("No attendance counts were found in the code columns.")
+
+    out = _drop_missing_ids(out, warnings)
+    return (
+        out.sort_values(["student_id", "course", "code"]).reset_index(drop=True),
+        warnings,
+    )
 
 
 def build_summary(

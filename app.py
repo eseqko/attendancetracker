@@ -15,7 +15,14 @@ st.set_page_config(
 )
 
 from ui import state  # noqa: E402
-from ui.views import cohorts, overview, patterns, student, upload_setup  # noqa: E402
+from ui.views import (  # noqa: E402
+    breakdowns,
+    cohorts,
+    overview,
+    patterns,
+    student,
+    upload_setup,
+)
 
 setup_page = st.Page(
     upload_setup.render, title="Upload & Setup", icon="📥", url_path="setup",
@@ -28,6 +35,9 @@ if state.bundle() is not None:
     overview_page = st.Page(
         overview.render, title="Overview", icon="📊", url_path="overview"
     )
+    breakdowns_page = st.Page(
+        breakdowns.render, title="Breakdowns", icon="🧮", url_path="breakdowns"
+    )
     student_page = st.Page(
         student.render, title="Student", icon="🧑‍🎓", url_path="student"
     )
@@ -37,9 +47,12 @@ if state.bundle() is not None:
     patterns_page = st.Page(
         patterns.render, title="Patterns", icon="📅", url_path="patterns"
     )
-    pages += [overview_page, student_page, cohorts_page, patterns_page]
+    pages += [
+        overview_page, breakdowns_page, student_page, cohorts_page, patterns_page,
+    ]
     registry.update(
         overview=overview_page,
+        breakdowns=breakdowns_page,
         student=student_page,
         cohorts=cohorts_page,
         patterns=patterns_page,

@@ -19,11 +19,20 @@ from .model import DetectionResult
 REPORT_ROLES = [
     "student_id", "name", "first_name", "last_name", "grade", "date", "code",
     "period", "days_enrolled", "days_absent", "days_excused", "days_unexcused",
-    "days_tardy", "attendance_pct",
+    "days_tardy", "attendance_pct", "ethnicity", "gender",
 ]
 
 #: Roles a caseload upload might map.
-CASELOAD_ROLES = ["student_id", "name", "first_name", "last_name", "grade"]
+CASELOAD_ROLES = [
+    "student_id", "name", "first_name", "last_name", "grade", "ethnicity",
+    "gender",
+]
+
+#: Roles a course-context (ATC-style) upload might map.
+COURSE_CONTEXT_ROLES = [
+    "student_id", "name", "first_name", "last_name", "grade", "course",
+    "section", "teacher", "counselor",
+]
 
 #: Roles whose values must be predominantly numeric, else the name-evidence
 #: claim is dropped.
@@ -389,6 +398,81 @@ def detect_report(
                 observed_codes[code] = observed_codes.get(code, 0) + count
     result = DetectionResult(
         shape=shape,
+        confidence=confidence,
+        header_row=used_header_row,
+        mapping=mapping,
+        warnings=warnings,
+        observed_codes=observed_codes,
+    )
+    return frame, result
+
+
+_COURSE_CODE_HEADER_RE = re.compile(r"^\s*(\S+)\s*-\s*\((.+?)\)\s*$")
+
+
+def course_code_columns(frame: pd.DataFrame) -> list[tuple[str, str, str]]:
+    """Code-count columns of an ATC-style file: (column, CODE, category value).
+
+    Headers look like 'CUT - (Unexcused)'; the parenthesized word names the
+    category. Codes in COURSE_PRESENT_LIKE_CODES (ACT/OFF) are present-like
+    regardless of their label — the district's own totals exclude them.
+    """
+    from .constants import COURSE_HEADER_CATEGORIES, COURSE_PRESENT_LIKE_CODES
+    from .constants import Category
+
+    found: list[tuple[str, str, str]] = []
+    for column in frame.columns:
+        match = _COURSE_CODE_HEADER_RE.match(str(column))
+        if not match:
+            continue
+        code = match.group(1).strip().upper()
+        label = match.group(2).strip().lower()
+        category = COURSE_HEADER_CATEGORIES.get(label)
+        if category is None:
+            continue
+        if code in COURSE_PRESENT_LIKE_CODES:
+            category = Category.OTHER_PRESENT
+        found.append((str(column), code, category.value))
+    return found
+
+
+def detect_course_context(
+    data: bytes,
+    filename: str,
+    sheet: str | None = None,
+    header_row: int | None = None,
+) -> tuple[pd.DataFrame, DetectionResult]:
+    """Load an ATC-style course/teacher report (one row per student x course
+    section, one count column per attendance code) and detect its columns.
+
+    This file is a supplemental upload: it adds by-course / by-teacher /
+    by-counselor breakdowns on top of the primary attendance report.
+    """
+    frame, used_header_row = load_table(
+        data, filename, sheet=sheet, header_row=header_row
+    )
+    mapping = infer_roles(frame, COURSE_CONTEXT_ROLES)
+    code_columns = course_code_columns(frame)
+    warnings: list[str] = []
+    confidence = "high"
+    if len(code_columns) < 3:
+        confidence = "low"
+        warnings.append(
+            "This doesn't look like a course-context report: expected several "
+            "'CODE - (Category)' count columns."
+        )
+    if "student_id" not in mapping:
+        confidence = "low"
+        warnings.append("No student ID column could be found.")
+    if "course" not in mapping and "teacher" not in mapping:
+        confidence = "low"
+        warnings.append("No course or teacher column could be found.")
+    observed_codes: dict[str, int] = {}
+    for column, code, _ in code_columns:
+        counts = pd.to_numeric(frame[column], errors="coerce").fillna(0)
+        observed_codes[code] = observed_codes.get(code, 0) + int(counts.sum())
+    result = DetectionResult(
+        shape=Shape.UNKNOWN,  # not one of the primary report shapes
         confidence=confidence,
         header_row=used_header_row,
         mapping=mapping,

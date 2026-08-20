@@ -46,6 +46,8 @@ REPORT_ROLE_LABELS = {
     "period": "Period",
     "name": "Student name",
     "grade": "Grade",
+    "ethnicity": "Race / ethnicity",
+    "gender": "Gender",
     "days_enrolled": "Days enrolled",
     "days_absent": "Days absent",
     "days_excused": "Excused absences",
@@ -63,6 +65,11 @@ def _cached_detect_caseload(data: bytes, filename: str, sheet, header_row):
 @st.cache_data(show_spinner="Reading report…")
 def _cached_detect_report(data: bytes, filename: str, sheet, header_row):
     return detection.detect_report(data, filename, sheet=sheet, header_row=header_row)
+
+
+@st.cache_data(show_spinner="Reading course report…")
+def _cached_detect_course(data: bytes, filename: str):
+    return detection.detect_course_context(data, filename)
 
 
 def _uploaded_file(section: str, label: str, help_text: str):
@@ -97,6 +104,7 @@ WIDGET_RESET_ON_NEW_FILE: dict[str, list[str]] = {
         "report_map_", "report_header_override", "report_sheet",
         "report_shape_radio", "code_editor", "treat_unknown",
     ],
+    "course": ["course_map_"],
 }
 
 
@@ -338,7 +346,7 @@ def _report_section() -> bool:
     chosen: dict[str, str | None] = {}
     if shape == Shape.PERIOD_WIDE:
         roles_required = ["student_id", "date"]
-        roles_optional = ["name", "grade"]
+        roles_optional = ["name", "grade", "ethnicity", "gender"]
         wide_columns = detection.period_wide_columns(frame)
         if len(wide_columns) >= 2:
             st.caption(
@@ -356,12 +364,13 @@ def _report_section() -> bool:
         roles_required = ["student_id", "date", "code"] + (
             ["period"] if shape == Shape.PERIOD else []
         )
-        roles_optional = ["name", "grade"]
+        roles_optional = ["name", "grade", "ethnicity", "gender"]
     else:
         roles_required = ["student_id"]
         roles_optional = [
             "days_enrolled", "days_absent", "days_tardy", "attendance_pct",
-            "days_excused", "days_unexcused", "name", "grade",
+            "days_excused", "days_unexcused", "name", "grade", "ethnicity",
+            "gender",
         ]
     cols = st.columns(3)
     for i, role in enumerate(roles_required + roles_optional):
@@ -533,6 +542,65 @@ def _codes_section() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Optional — course/teacher context report
+# ---------------------------------------------------------------------------
+
+
+def _course_context_section() -> None:
+    with st.expander(
+        "Optional: course / teacher context report (for by-course, by-teacher "
+        "and by-counselor breakdowns)"
+    ):
+        st.caption(
+            "The per-class export with one row per student per course and one "
+            "count column per code ('CUT - (Unexcused)', …). Entirely "
+            "optional — skip it if you don't have one."
+        )
+        data, filename = _uploaded_file(
+            "course",
+            "Course context report (CSV or Excel)",
+            "Adds course, teacher, and counselor breakdowns on top of the "
+            "main attendance report.",
+        )
+        if data is None:
+            return
+        frame, result = _cached_detect_course(data, filename)
+        components.warnings_panel(result.warnings)
+        st.dataframe(frame.head(5), hide_index=True)
+        columns = [str(c) for c in frame.columns]
+        cols = st.columns(3)
+        chosen: dict[str, str | None] = {}
+        for i, role in enumerate(
+            ["student_id", "course", "teacher", "counselor", "section"]
+        ):
+            with cols[i % 3]:
+                chosen[role] = _role_selectbox(
+                    {
+                        "student_id": "Student ID",
+                        "course": "Course title",
+                        "teacher": "Teacher",
+                        "counselor": "Counselor",
+                        "section": "Section",
+                    }[role],
+                    columns,
+                    result.mapping.get(role),
+                    f"course_map_{role}",
+                    required=role == "student_id",
+                )
+        if state.get_setup("course_done"):
+            st.success("Course context confirmed — it's applied when you finish setup.")
+        if st.button("Confirm course context", key="confirm_course"):
+            mapping = ColumnMapping(
+                shape=Shape.UNKNOWN,
+                columns={role: col for role, col in chosen.items() if col},
+            )
+            state.set_setup("course_frame", frame)
+            state.set_setup("course_mapping", mapping)
+            state.set_setup("course_done", True)
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Section 4 — match & finish
 # ---------------------------------------------------------------------------
 
@@ -640,6 +708,8 @@ def _finish_section() -> None:
                 absent_day_threshold=threshold,
                 enrolled_override=enrolled_override,
                 prebuilt_students=students,
+                course_frame=state.get_setup("course_frame"),
+                course_mapping=state.get_setup("course_mapping"),
             )
         state.set_bundle(bundle, warnings)
         overview = st.session_state.get("_pages", {}).get("overview")
@@ -667,6 +737,8 @@ def render() -> None:
         if _report_section():
             st.divider()
             if _codes_section():
+                st.divider()
+                _course_context_section()
                 st.divider()
                 _finish_section()
     st.divider()
