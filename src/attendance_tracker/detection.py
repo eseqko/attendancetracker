@@ -251,6 +251,24 @@ def observed_code_counts(series: pd.Series) -> dict[str, int]:
 # ---------------------------------------------------------------------------
 
 
+_PERIOD_WIDE_HEADER_RE = re.compile(r"^period (\d{1,2})$")
+
+
+def period_wide_columns(frame: pd.DataFrame) -> list[str]:
+    """Columns named 'Period N' (any case/punctuation), in period order.
+
+    Two or more of these alongside a date column mark the wide period layout
+    (e.g. Synergy ATP201): one row per student per day, one column per period,
+    each cell a code word or blank.
+    """
+    found: list[tuple[int, str]] = []
+    for column in frame.columns:
+        match = _PERIOD_WIDE_HEADER_RE.match(_normalize_header(str(column)))
+        if match:
+            found.append((int(match.group(1)), str(column)))
+    return [column for _, column in sorted(found)]
+
+
 def _find_period_column(frame: pd.DataFrame, mapping: dict[str, str]) -> str | None:
     """Unmapped period-like column that best explains duplicate student-date
     rows (lowest residual duplicate rate once included)."""
@@ -279,6 +297,20 @@ def detect_shape(
     id_col = mapping.get("student_id")
     date_col = mapping.get("date")
     code_col = mapping.get("code")
+
+    wide_columns = period_wide_columns(frame)
+    if date_col is not None and len(wide_columns) >= 2:
+        # Wide period layout (ATP201-style). The codes live in the period
+        # columns, so name-matched 'period'/'code' roles are false positives
+        # here (e.g. 'ZIP Code 5' phrase-matching the code role) — drop them.
+        mapping.pop("period", None)
+        mapping.pop("code", None)
+        confidence = "high"
+        for role in REQUIRED_ROLES[Shape.PERIOD_WIDE]:
+            if role not in mapping:
+                warnings.append(f"No column could be found for '{role}'.")
+                confidence = "low"
+        return Shape.PERIOD_WIDE, confidence, warnings
 
     if date_col is not None and code_col is not None:
         shape, confidence = Shape.DAILY, "high"
@@ -351,6 +383,10 @@ def detect_report(
     observed_codes: dict[str, int] = {}
     if shape in (Shape.DAILY, Shape.PERIOD) and "code" in mapping:
         observed_codes = observed_code_counts(frame[mapping["code"]])
+    elif shape == Shape.PERIOD_WIDE:
+        for column in period_wide_columns(frame):
+            for code, count in observed_code_counts(frame[column]).items():
+                observed_codes[code] = observed_codes.get(code, 0) + count
     result = DetectionResult(
         shape=shape,
         confidence=confidence,

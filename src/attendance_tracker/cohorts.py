@@ -61,9 +61,15 @@ def baseline_from_events(
     all_events: pd.DataFrame,
     absent_day_threshold: float = DEFAULT_ABSENT_DAY_THRESHOLD,
     enrolled_override: int | pd.Series | None = None,
+    day_status: pd.DataFrame | None = None,
 ) -> BaselineMetrics:
-    """Schoolwide aggregates from the full events frame (all students)."""
-    day_status = build_day_status(all_events, absent_day_threshold)
+    """Schoolwide aggregates from the full events frame (all students).
+
+    Pass a densified ``day_status`` for exception-style wide reports so the
+    baseline uses the corrected day flags and denominators.
+    """
+    if day_status is None:
+        day_status = build_day_status(all_events, absent_day_threshold)
     counts = per_student_counts(day_status, enrolled_override)
     counts["attendance_rate"] = 1 - counts["days_absent"] / counts["days_enrolled"]
     counts["tier"] = tier_series(counts["days_absent"], counts["days_enrolled"])

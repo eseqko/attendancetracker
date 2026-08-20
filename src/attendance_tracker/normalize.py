@@ -194,6 +194,84 @@ def build_events(
     return out.reset_index(drop=True), warnings
 
 
+#: Leading date token of strings like '08/07/2026 (D2S)' — ATP201 date cells
+#: carry a schedule-type suffix that must not reach the date parser.
+_DATE_PREFIX_RE = r"^\s*([0-9][0-9/\-\.]*)"
+
+
+def build_events_wide(
+    frame: pd.DataFrame, mapping: ColumnMapping, code_map: CodeMap
+) -> tuple[pd.DataFrame, list[str]]:
+    """Build canonical events from a wide period report (Shape.PERIOD_WIDE).
+
+    The input (e.g. Synergy ATP201) has one row per student per day and one
+    column per period; each cell is a code word or blank. Only marked cells
+    become events — a blank cell means present/unscheduled, and days with no
+    marks don't appear at all (exception report). Date cells may carry a
+    schedule-type suffix like '08/07/2026 (D2S)', which is stripped.
+
+    Privacy: every column that is not the student id, date, grade, name, or a
+    'Period N' column is discarded here — the demographic and family-contact
+    columns of a full ATP201 export never reach the analysis frames.
+    """
+    from .detection import period_wide_columns  # function-level: avoids a cycle
+
+    warnings: list[str] = []
+    period_columns = period_wide_columns(frame)
+    if not period_columns:
+        raise ValueError("no 'Period N' columns found for a wide period report")
+    cols = mapping.columns
+
+    base = pd.DataFrame(index=frame.index)
+    base["student_id"] = normalize_id_series(frame[cols["student_id"]])
+    date_text = (
+        frame[cols["date"]].astype("string").str.extract(_DATE_PREFIX_RE)[0]
+    )
+    base["date"] = (
+        pd.to_datetime(date_text, errors="coerce")
+        .astype("datetime64[ns]")
+        .dt.normalize()
+    )
+    for role in ("name", "grade"):
+        if role in cols:
+            base[role] = _string_column(frame[cols[role]])
+
+    pieces: list[pd.DataFrame] = []
+    for column in period_columns:
+        digits = "".join(ch for ch in str(column) if ch.isdigit())
+        cell = frame[column].astype("string").str.strip()
+        marked = (cell.notna() & (cell != "")).fillna(False)
+        if not marked.any():
+            continue
+        piece = base.loc[marked].copy()
+        piece["period"] = pd.array([digits] * len(piece), dtype="string")
+        code = cell.loc[marked].str.upper()
+        piece["code"] = code
+        piece["category"] = code.map(
+            lambda c: code_map.category_for(c).value, na_action="ignore"
+        ).astype("string")
+        pieces.append(piece)
+
+    columns_order = ["student_id", "date", "period", "code", "category"] + [
+        role for role in ("name", "grade") if role in cols
+    ]
+    if pieces:
+        out = pd.concat(pieces)[columns_order]
+    else:
+        out = base.iloc[0:0].reindex(columns=columns_order)
+        warnings.append("No attendance marks were found in the period columns.")
+
+    out = _drop_missing_ids(out, warnings)
+    bad_dates = out["date"].isna()
+    if bad_dates.any():
+        warnings.append(
+            f"Dropped {int(bad_dates.sum())} row(s) with unparseable dates."
+        )
+        out = out.loc[~bad_dates]
+
+    return out.sort_values(["student_id", "date"]).reset_index(drop=True), warnings
+
+
 def build_summary(
     frame: pd.DataFrame, mapping: ColumnMapping
 ) -> tuple[pd.DataFrame, list[str]]:

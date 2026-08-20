@@ -203,6 +203,110 @@ def build_day_status(
     return day
 
 
+def infer_periods_per_day(events: pd.DataFrame) -> int:
+    """Schedule size implied by an exception-style period report: the largest
+    number of marks any student has on a single day (their full-absence days
+    reveal how many periods they carry)."""
+    if not len(events):
+        return 1
+    counts = events.groupby(["student_id", "date"], observed=True).size()
+    return int(counts.max())
+
+
+def densify_day_status(
+    day_status: pd.DataFrame,
+    periods_per_day: int,
+    calendar: pd.DatetimeIndex,
+    absent_day_threshold: float = DEFAULT_ABSENT_DAY_THRESHOLD,
+    student_ids: list[str] | None = None,
+) -> pd.DataFrame:
+    """Correct a day-status frame built from an exception report.
+
+    Exception reports (e.g. ATP201) only list days with marks, and only the
+    marked periods of those days, so two denominators are wrong: the periods
+    scheduled per day (a single-period cut must not count as a full absent
+    day) and the set of enrolled days (unlisted days mean PRESENT). This
+    recomputes the day flags against ``periods_per_day`` and adds a present
+    row for every (student, calendar day) pair with no marks — including
+    students with no marks at all when ``student_ids`` is given.
+    """
+    fixed = day_status.copy()
+    scheduled = np.maximum(
+        fixed["periods_scheduled"].to_numpy(dtype="int64"), int(periods_per_day)
+    )
+    absent = fixed["periods_absent"].to_numpy(dtype="int64")
+    excused = fixed["periods_absent_excused"].to_numpy(dtype="int64")
+    tardy = fixed["periods_tardy"].to_numpy(dtype="int64")
+    unexcused = fixed["periods_absent_unexcused"].to_numpy(dtype="int64")
+
+    is_absent_day = absent / scheduled >= absent_day_threshold
+    is_partial = (absent > 0) & ~is_absent_day
+    is_tardy_day = tardy > 0
+    fixed["periods_scheduled"] = scheduled
+    fixed["is_absent_day"] = is_absent_day
+    fixed["is_partial_absence"] = is_partial
+    fixed["is_tardy_day"] = is_tardy_day
+    fixed["dominant_status"] = pd.array(
+        np.select(
+            [
+                is_absent_day & (unexcused >= excused),
+                is_absent_day,
+                is_partial,
+                is_tardy_day,
+            ],
+            [
+                Category.ABSENT_UNEXCUSED.value,
+                Category.ABSENT_EXCUSED.value,
+                PARTIAL_STATUS,
+                Category.TARDY.value,
+            ],
+            default=Category.PRESENT.value,
+        ),
+        dtype="string",
+    )
+
+    if student_ids is None:
+        students = fixed["student_id"].astype("string").dropna().unique().tolist()
+    else:
+        students = [str(s) for s in student_ids]
+    full_index = pd.MultiIndex.from_product(
+        [students, pd.DatetimeIndex(calendar)], names=["student_id", "date"]
+    )
+    marked_index = pd.MultiIndex.from_arrays(
+        [fixed["student_id"].astype(str), fixed["date"]],
+        names=["student_id", "date"],
+    )
+    missing = full_index.difference(marked_index)
+    if len(missing):
+        fill_students = missing.get_level_values("student_id").tolist()
+        fill_dates = missing.get_level_values("date").tolist()
+        n_fill = len(fill_students)
+        zeros = np.zeros(n_fill, dtype="int64")
+        present = pd.DataFrame(
+            {
+                "student_id": pd.array(fill_students, dtype="string"),
+                "date": pd.Series(fill_dates, dtype="datetime64[ns]"),
+                "periods_scheduled": np.full(n_fill, int(periods_per_day)),
+                "periods_absent": zeros,
+                "periods_absent_excused": zeros,
+                "periods_absent_unexcused": zeros,
+                "periods_tardy": zeros,
+                "is_absent_day": np.zeros(n_fill, dtype="bool"),
+                "is_partial_absence": np.zeros(n_fill, dtype="bool"),
+                "is_tardy_day": np.zeros(n_fill, dtype="bool"),
+                "dominant_status": pd.array(
+                    [Category.PRESENT.value] * n_fill, dtype="string"
+                ),
+            }
+        )
+        fixed = pd.concat([fixed, present], ignore_index=True)
+
+    return (
+        fixed.sort_values(["student_id", "date"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+
+
 def per_student_counts(
     day_status: pd.DataFrame,
     enrolled_override: int | pd.Series | None = None,
@@ -534,10 +638,15 @@ def _empty_period_table() -> pd.DataFrame:
     )
 
 
-def period_table(events: pd.DataFrame) -> pd.DataFrame:
+def period_table(
+    events: pd.DataFrame, sessions: int | None = None
+) -> pd.DataFrame:
     """Per student x period: scheduled count, unexcused misses, miss rate.
 
     Uses PERIOD rows only (period not NA); daily rows contribute nothing.
+    For exception-style reports (marks only — no present rows), pass
+    ``sessions`` = the number of school days so far: it becomes the scheduled
+    count per period, since mark counts alone are not a denominator.
     """
     if "period" not in events.columns:
         return _empty_period_table()
@@ -560,6 +669,8 @@ def period_table(events: pd.DataFrame) -> pd.DataFrame:
         .agg(scheduled=("unexcused", "size"), unexcused_absent=("unexcused", "sum"))
         .reset_index()
     )
+    if sessions is not None:
+        out["scheduled"] = np.maximum(int(sessions), out["scheduled"])
     out["rate"] = out["unexcused_absent"] / out["scheduled"]
     return out
 
@@ -654,6 +765,9 @@ def metrics_from_events(
     students: pd.DataFrame,
     absent_day_threshold: float = DEFAULT_ABSENT_DAY_THRESHOLD,
     enrolled_override: int | pd.Series | None = None,
+    day_status: pd.DataFrame | None = None,
+    calendar: pd.DatetimeIndex | None = None,
+    period_sessions: int | None = None,
 ) -> pd.DataFrame:
     """Assemble the per-student metrics frame from day/period events.
 
@@ -661,13 +775,21 @@ def metrics_from_events(
     row with NA metrics and ``matched=False``. If ``students`` already carries
     a 'matched' column (from joining) it is trusted; otherwise a student is
     matched when they appear in ``events``.
+
+    The last three parameters are the hooks for exception-style wide reports
+    (Shape.PERIOD_WIDE): a densified ``day_status`` (see densify_day_status),
+    the full school ``calendar``, and ``period_sessions`` for the per-period
+    denominator.
     """
-    day_status = build_day_status(events, absent_day_threshold)
+    if day_status is None:
+        day_status = build_day_status(events, absent_day_threshold)
+    if calendar is None:
+        calendar = events_calendar(events)
     counts = per_student_counts(day_status, enrolled_override)
-    streaks = compute_streaks(day_status, events_calendar(events))
+    streaks = compute_streaks(day_status, calendar)
     flags = mon_fri_flags(weekday_rates(day_status))
     trends = compute_trends(weekly_rates(day_status))
-    skips = period_skips(period_table(events))
+    skips = period_skips(period_table(events, sessions=period_sessions))
 
     report_ids = set(events["student_id"].astype("string").dropna().tolist())
     out = _caseload_base(students, report_ids)

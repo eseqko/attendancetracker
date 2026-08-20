@@ -32,6 +32,9 @@ class Shape(str, enum.Enum):
     DAILY = "daily"  # one row per student per day
     SUMMARY = "summary"  # one row per student, totals only
     PERIOD = "period"  # one row per student per day per period
+    PERIOD_WIDE = "period_wide"  # one row per student per day, one column per
+    # period (e.g. Synergy ATP201) — an exception report: days with no marks
+    # don't appear, and a blank period cell means present/unscheduled
     UNKNOWN = "unknown"
 
 
@@ -47,6 +50,9 @@ class Capability(str, enum.Enum):
 SHAPE_CAPABILITIES: dict[Shape, frozenset[Capability]] = {
     Shape.DAILY: frozenset({Capability.SUMMARY_MIN, Capability.DAILY}),
     Shape.PERIOD: frozenset(
+        {Capability.SUMMARY_MIN, Capability.DAILY, Capability.PERIOD}
+    ),
+    Shape.PERIOD_WIDE: frozenset(
         {Capability.SUMMARY_MIN, Capability.DAILY, Capability.PERIOD}
     ),
     Shape.SUMMARY: frozenset({Capability.SUMMARY_MIN}),
@@ -167,6 +173,21 @@ DEFAULT_CODE_MAP: dict[str, Category] = {
     "SCH": Category.OTHER_PRESENT,
     "ACT": Category.OTHER_PRESENT,
     "NUR": Category.OTHER_PRESENT,
+    # Word-style codes (Synergy ATP201 period cells). "Activity" and
+    # "Office Ex" are present-like: the district's own ATC report excludes
+    # their ACT/OFF counterparts from Total Absences. "Ilness" is the SIS's
+    # spelling; keep both.
+    "UNVERIFIED": Category.ABSENT_UNEXCUSED,
+    "PARENT UNEXCUSED": Category.ABSENT_UNEXCUSED,
+    "ILNESS": Category.ABSENT_EXCUSED,
+    "ILLNESS": Category.ABSENT_EXCUSED,
+    "EXCUSED": Category.ABSENT_EXCUSED,
+    "COUNSELING": Category.ABSENT_EXCUSED,
+    "ACTIVITY": Category.OTHER_PRESENT,
+    "OFFICE EX": Category.OTHER_PRESENT,
+    "TARDY": Category.TARDY,
+    "UNX.TARDY": Category.TARDY,
+    "TARDY 30MIN": Category.TARDY,
 }
 
 #: Codes whose default categorization deserves a second look from the user.
@@ -182,8 +203,8 @@ AMBIGUOUS_CODES = frozenset({"ISS"})
 ROLE_SYNONYMS: dict[str, list[str]] = {
     "student_id": [
         "student id", "studentid", "student number", "student no", "stu id",
-        "local id", "localid", "perm id", "permid", "ssid", "state id",
-        "id number", "student_number", "othername id", "id",
+        "local id", "localid", "perm id", "permid", "sis number", "sis id",
+        "ssid", "state id", "id number", "student_number", "othername id", "id",
     ],
     "name": [
         "student name", "name", "student", "full name",
@@ -225,6 +246,7 @@ ROLE_SYNONYMS: dict[str, list[str]] = {
 REQUIRED_ROLES: dict[Shape, list[str]] = {
     Shape.DAILY: ["student_id", "date", "code"],
     Shape.PERIOD: ["student_id", "date", "code", "period"],
+    Shape.PERIOD_WIDE: ["student_id", "date"],  # period columns are derived
     Shape.SUMMARY: ["student_id"],  # plus >=1 of the summary count roles
 }
 

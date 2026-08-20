@@ -25,6 +25,8 @@ SHAPE_LABELS = {
     Shape.DAILY: "One row per student per day",
     Shape.SUMMARY: "One row per student (summary totals)",
     Shape.PERIOD: "One row per student per day per period",
+    Shape.PERIOD_WIDE: "One row per student per day, one column per period "
+    "(ATP201-style)",
 }
 
 CATEGORY_LABELS = {
@@ -244,9 +246,10 @@ def _required_roles_ok(shape: Shape, chosen: dict[str, str | None]) -> str | Non
     """Returns an error message or None."""
     if not chosen.get("student_id"):
         return "A Student ID column is required."
-    if shape in (Shape.DAILY, Shape.PERIOD):
+    if shape in (Shape.DAILY, Shape.PERIOD, Shape.PERIOD_WIDE):
         if not chosen.get("date"):
             return "A Date column is required for day-level reports."
+    if shape in (Shape.DAILY, Shape.PERIOD):
         if not chosen.get("code"):
             return "An attendance-code column is required for day-level reports."
     if shape == Shape.PERIOD and not chosen.get("period"):
@@ -316,7 +319,7 @@ def _report_section() -> bool:
     components.warnings_panel(result.warnings)
     st.dataframe(frame.head(10), hide_index=True)
 
-    shape_options = [Shape.DAILY, Shape.SUMMARY, Shape.PERIOD]
+    shape_options = [Shape.DAILY, Shape.SUMMARY, Shape.PERIOD, Shape.PERIOD_WIDE]
     default_index = (
         shape_options.index(result.shape) if result.shape in shape_options else None
     )
@@ -333,7 +336,23 @@ def _report_section() -> bool:
     columns = [str(c) for c in frame.columns]
     st.markdown("**Which column is which?**")
     chosen: dict[str, str | None] = {}
-    if shape in (Shape.DAILY, Shape.PERIOD):
+    if shape == Shape.PERIOD_WIDE:
+        roles_required = ["student_id", "date"]
+        roles_optional = ["name", "grade"]
+        wide_columns = detection.period_wide_columns(frame)
+        if len(wide_columns) >= 2:
+            st.caption(
+                f"Period columns found: {', '.join(wide_columns)} — each cell "
+                "is read as an attendance code; blank means present. All other "
+                "columns (including contact/demographic ones) are ignored and "
+                "never kept."
+            )
+        else:
+            st.error(
+                "This layout needs at least two 'Period N' columns, but they "
+                "weren't found in this file."
+            )
+    elif shape in (Shape.DAILY, Shape.PERIOD):
         roles_required = ["student_id", "date", "code"] + (
             ["period"] if shape == Shape.PERIOD else []
         )
@@ -370,6 +389,14 @@ def _report_section() -> bool:
         if shape == Shape.SUMMARY:
             state.set_setup("observed_codes", {})
             state.set_setup("codes_done", True)
+        elif shape == Shape.PERIOD_WIDE:
+            observed: dict[str, int] = {}
+            for column in detection.period_wide_columns(frame):
+                for code, count in detection.observed_code_counts(
+                    frame[column]
+                ).items():
+                    observed[code] = observed.get(code, 0) + count
+            state.set_setup("observed_codes", observed)
         else:
             observed = detection.observed_code_counts(frame[chosen["code"]])
             state.set_setup("observed_codes", observed)
@@ -568,15 +595,17 @@ def _finish_section() -> None:
 
     enrolled_override = None
     threshold = DEFAULT_ABSENT_DAY_THRESHOLD
-    if shape in (Shape.DAILY, Shape.PERIOD):
+    if shape in (Shape.DAILY, Shape.PERIOD, Shape.PERIOD_WIDE):
         observed = state.get_setup("observed_codes", {})
-        share = _present_like_share(observed, code_map)
-        if share < EXCEPTION_REPORT_PRESENT_SHARE:
+        needs_school_days = shape == Shape.PERIOD_WIDE or (
+            _present_like_share(observed, code_map) < EXCEPTION_REPORT_PRESENT_SHARE
+        )
+        if needs_school_days:
             st.warning(
-                "This report looks like an **absences-only** export (it has "
-                "almost no 'present' rows), so total school days can't be "
-                "counted from it. Enter how many school days there have been "
-                "so far this year.",
+                "This report only lists days with attendance marks, so total "
+                "school days can't be counted from it. Enter how many school "
+                "days there have been so far this year — rates and tiers "
+                "depend on it.",
                 icon="📅",
             )
             enrolled_override = int(
@@ -588,7 +617,7 @@ def _finish_section() -> None:
                     key="enrolled_override",
                 )
             )
-        if shape == Shape.PERIOD:
+        if shape in (Shape.PERIOD, Shape.PERIOD_WIDE):
             with st.expander("Advanced: what counts as an absent day?"):
                 threshold = st.slider(
                     "A day counts as absent when at least this share of the "

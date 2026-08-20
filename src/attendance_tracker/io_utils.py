@@ -102,21 +102,25 @@ def looks_like_number(value: object) -> bool:
 
 
 def looks_like_date(value: object) -> bool:
-    """True when a cell value is a date or a string that parses as one.
+    """True when a cell value is a date or a string that starts with one.
 
     Strings must contain a digit and a date separator before parsing is even
-    attempted, so bare numbers ("06") and words ("March") never count.
+    attempted, so bare numbers ("06") and words ("March") never count. A
+    trailing annotation after the date is tolerated — ATP201 exports write
+    dates like "08/07/2026 (D2S)".
     """
     if isinstance(value, (pd.Timestamp, dt.date, dt.datetime)):
         return True
     text = str(value).strip()
     if not _DIGIT_RE.search(text) or not _DATE_SEPARATOR_RE.search(text):
         return False
-    try:
-        pd.to_datetime(text)
-    except (ValueError, TypeError, OverflowError):
-        return False
-    return True
+    for candidate in (text, text.split(" ", 1)[0]):
+        try:
+            pd.to_datetime(candidate)
+        except (ValueError, TypeError, OverflowError):
+            continue
+        return True
+    return False
 
 
 def _is_blank(value: object) -> bool:

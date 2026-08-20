@@ -57,13 +57,37 @@ grade-level analyses. Any additional columns you add (case manager, program, …
 become group-by options on the Cohorts page. The setup wizard always shows you which column it
 mapped to which field so you can correct it before anything is computed.
 
+## Attendance report formats
+
+Four layouts are auto-detected (and always confirmed by you before anything is computed):
+
+1. **One row per student per day** — student ID + date + attendance code.
+2. **One row per student** — summary totals (days enrolled / absent / attendance %). Powers
+   tiers and cohorts; time-based charts explain they need day-level data.
+3. **One row per student per day per period** — long period-level data.
+4. **One row per student per day, one column per period** — e.g. **Synergy ATP201**. The
+   columns the tracker uses are exactly:
+   - `Sis Number` — the student ID; must be the same **Perm ID** as the caseload
+   - `Date` — schedule-type suffixes like `08/07/2026 (D2S)` are handled
+   - `Period 0` … `Period N` — each cell an attendance code word (`Unverified`, `Ilness`,
+     `Unx.Tardy`, `Activity`, …); blank means present
+   - `Grade` — recommended, for grade-level comparisons
+
+   Every other ATP201 column — names, birth date, ethnicity, addresses, phone numbers, parent
+   and family contacts — is **ignored at parse time and never enters the analysis data**.
+   ATP201 is an *exception report* (only days with marks appear), so setup asks for the number
+   of school days so far; unlisted days count as present, and a caseload student with no marks
+   at all shows as unmatched — that usually just means perfect attendance. Following the
+   district's own counting rules, `Activity` and `Office Ex` are treated as present-like, and
+   tardies never count as absences.
+
 ## Usage
 
 1. **Upload your caseload** (CSV or Excel) in the template format above. Extra columns (e.g.
    case manager, program) become group-by options on the Cohorts page.
-2. **Upload the attendance report** (CSV or Excel). The app auto-detects the report's shape —
-   one row per student-day, a per-student summary, or period-by-period — and asks you to confirm
-   the column mapping. Header rows buried under title/preamble lines are detected automatically.
+2. **Upload the attendance report** (CSV or Excel) in any format above. The app auto-detects
+   the layout and asks you to confirm the column mapping. Header rows buried under
+   title/preamble lines are detected automatically.
 3. **Confirm attendance codes** (for day-level reports): map each code your SIS uses (A, U, E,
    T, ISS, …) to a category. Sensible defaults are proposed; you can save the mapping as JSON
    and re-load it next time.
