@@ -8,11 +8,13 @@ version = "0.1.0"
 description = "Local Streamlit app that filters a schoolwide attendance report down to your caseload and analyzes individual and cohort trends"
 requires-python = ">=3.10"
 dependencies = [
-    "streamlit>=1.36",
-    "pandas>=2.0",
-    "numpy>=1.24",
-    "plotly>=5.18",
-    "openpyxl>=3.1",
+    # Upper bounds = the newest majors the suite and app are verified on,
+    # so a double-click install can't pick up a breaking future release.
+    "streamlit>=1.36,<2",
+    "pandas>=2.0,<4",
+    "numpy>=1.24,<3",
+    "plotly>=5.18,<7",
+    "openpyxl>=3.1,<4",
 ]
 
 [project.optional-dependencies]

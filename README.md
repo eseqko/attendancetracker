@@ -29,7 +29,23 @@ This tool is designed for sensitive student data:
 - The repo's `.gitignore` blocks all `*.csv` / `*.xlsx` files so real exports can't be
   committed by accident.
 
-## Setup
+## Easiest setup (no command line)
+
+1. Get the project onto your computer: on the GitHub page click **Code → Download ZIP**, then
+   unzip it anywhere (Documents is fine).
+2. Double-click the installer — **`install_windows.bat`** on Windows,
+   **`install_mac.command`** on a Mac. It finds (or installs) Python, sets everything up, and
+   on Windows puts an **Attendance Tracker** shortcut on your desktop. The first run takes a
+   few minutes; leave the window open until it says Done.
+3. Start the app any time by double-clicking the desktop shortcut (Windows) or
+   **`run_tracker.command`** (Mac). Your browser opens; keep the black window open while you
+   work, close it to stop.
+
+First-time clicks may need a nudge past the safety prompts: on Windows, if SmartScreen appears
+choose **More info → Run anyway**; on a Mac, right-click the file and choose **Open** the first
+time.
+
+## Setup (command line)
 
 ```bash
 python3 -m venv .venv
