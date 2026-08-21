@@ -18,6 +18,7 @@ dist/
 *.xlsm
 data/
 sample_data/
+local_data/
 
 # Streamlit
 .streamlit/secrets.toml

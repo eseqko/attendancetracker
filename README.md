@@ -22,9 +22,14 @@ focuses on *your* students, and analyzes:
 This tool is designed for sensitive student data:
 
 - Everything runs **locally on your computer**. No cloud services, no external APIs.
-- Uploaded files are held **in memory only** for the browser session — the app never writes
-  student data to disk.
-- The only thing you can save is a small **code-mapping JSON** (which attendance codes mean
+- By default, uploaded files are held **in memory only** for the browser session — nothing is
+  written to disk.
+- If you turn on **"Remember these files and settings on this computer"** at the end of setup,
+  the app keeps copies of your uploads and your setup choices in a `local_data/` folder next to
+  the app — local only, never synced, shared, or committed (it's gitignored). Treat that folder
+  like any file containing student data, and use **"Forget saved data"** in Upload & Setup to
+  erase it at any time. The settings file itself contains no student information.
+- You can also save a small **code-mapping JSON** (which attendance codes mean
   absent/tardy/etc.). It contains no student data.
 - The repo's `.gitignore` blocks all `*.csv` / `*.xlsx` files so real exports can't be
   committed by accident.

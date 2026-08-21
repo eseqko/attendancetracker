@@ -17,6 +17,17 @@ st.set_page_config(
 from ui import state, theme  # noqa: E402
 
 theme.inject()
+
+from ui.views import upload_setup as _setup_view  # noqa: E402
+
+if (
+    state.bundle() is None
+    and not st.session_state.get("suppress_autoload")
+    and not st.session_state.get("autoload_attempted")
+):
+    st.session_state["autoload_attempted"] = True
+    with st.spinner("Loading saved setup…"):
+        _setup_view.restore_saved_setup()
 from ui.views import (  # noqa: E402
     breakdowns,
     cohorts,
@@ -72,9 +83,11 @@ with st.sidebar:
     if bundle is not None:
         matched = int(bundle.metrics["matched"].sum())
         st.caption(f"{matched} caseload students loaded")
+        saved_on = st.session_state.get("loaded_from_profile")
+        if saved_on:
+            st.caption(f"Saved setup from {saved_on} — change it in Upload & Setup")
     st.caption(
-        "Data stays on this computer, in memory only — nothing is uploaded "
-        "or saved."
+        "Data stays on this computer and is never sent anywhere."
     )
 
 st.navigation(pages).run()
