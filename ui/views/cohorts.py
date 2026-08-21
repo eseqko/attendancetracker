@@ -25,7 +25,7 @@ def _extra_group_columns(students: pd.DataFrame) -> list[str]:
 
 def render() -> None:
     bundle = state.bundle()
-    st.title("👥 Cohorts")
+    st.title("Cohorts")
     metrics = bundle.metrics
 
     st.subheader("Caseload vs. schoolwide")

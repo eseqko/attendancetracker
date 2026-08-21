@@ -17,7 +17,7 @@ WATCHLIST_COLUMNS = [
 
 def render() -> None:
     bundle = state.bundle()
-    st.title("📊 Overview")
+    st.title("Overview")
     metrics = bundle.metrics
     matched = metrics[metrics["matched"]]
     baseline = bundle.baseline

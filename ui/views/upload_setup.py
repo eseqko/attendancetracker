@@ -25,6 +25,8 @@ SHAPE_LABELS = {
     Shape.DAILY: "One row per student per day",
     Shape.SUMMARY: "One row per student (summary totals)",
     Shape.PERIOD: "One row per student per day per period",
+    Shape.PERIOD_WIDE: "One row per student per day, one column per period "
+    "(ATP201-style)",
 }
 
 CATEGORY_LABELS = {
@@ -44,6 +46,8 @@ REPORT_ROLE_LABELS = {
     "period": "Period",
     "name": "Student name",
     "grade": "Grade",
+    "ethnicity": "Race / ethnicity",
+    "gender": "Gender",
     "days_enrolled": "Days enrolled",
     "days_absent": "Days absent",
     "days_excused": "Excused absences",
@@ -61,6 +65,11 @@ def _cached_detect_caseload(data: bytes, filename: str, sheet, header_row):
 @st.cache_data(show_spinner="Reading report…")
 def _cached_detect_report(data: bytes, filename: str, sheet, header_row):
     return detection.detect_report(data, filename, sheet=sheet, header_row=header_row)
+
+
+@st.cache_data(show_spinner="Reading course report…")
+def _cached_detect_course(data: bytes, filename: str):
+    return detection.detect_course_context(data, filename)
 
 
 def _uploaded_file(section: str, label: str, help_text: str):
@@ -95,6 +104,7 @@ WIDGET_RESET_ON_NEW_FILE: dict[str, list[str]] = {
         "report_map_", "report_header_override", "report_sheet",
         "report_shape_radio", "code_editor", "treat_unknown",
     ],
+    "course": ["course_map_"],
 }
 
 
@@ -244,9 +254,10 @@ def _required_roles_ok(shape: Shape, chosen: dict[str, str | None]) -> str | Non
     """Returns an error message or None."""
     if not chosen.get("student_id"):
         return "A Student ID column is required."
-    if shape in (Shape.DAILY, Shape.PERIOD):
+    if shape in (Shape.DAILY, Shape.PERIOD, Shape.PERIOD_WIDE):
         if not chosen.get("date"):
             return "A Date column is required for day-level reports."
+    if shape in (Shape.DAILY, Shape.PERIOD):
         if not chosen.get("code"):
             return "An attendance-code column is required for day-level reports."
     if shape == Shape.PERIOD and not chosen.get("period"):
@@ -316,7 +327,7 @@ def _report_section() -> bool:
     components.warnings_panel(result.warnings)
     st.dataframe(frame.head(10), hide_index=True)
 
-    shape_options = [Shape.DAILY, Shape.SUMMARY, Shape.PERIOD]
+    shape_options = [Shape.DAILY, Shape.SUMMARY, Shape.PERIOD, Shape.PERIOD_WIDE]
     default_index = (
         shape_options.index(result.shape) if result.shape in shape_options else None
     )
@@ -333,16 +344,33 @@ def _report_section() -> bool:
     columns = [str(c) for c in frame.columns]
     st.markdown("**Which column is which?**")
     chosen: dict[str, str | None] = {}
-    if shape in (Shape.DAILY, Shape.PERIOD):
+    if shape == Shape.PERIOD_WIDE:
+        roles_required = ["student_id", "date"]
+        roles_optional = ["name", "grade", "ethnicity", "gender"]
+        wide_columns = detection.period_wide_columns(frame)
+        if len(wide_columns) >= 2:
+            st.caption(
+                f"Period columns found: {', '.join(wide_columns)} — each cell "
+                "is read as an attendance code; blank means present. All other "
+                "columns (including contact/demographic ones) are ignored and "
+                "never kept."
+            )
+        else:
+            st.error(
+                "This layout needs at least two 'Period N' columns, but they "
+                "weren't found in this file."
+            )
+    elif shape in (Shape.DAILY, Shape.PERIOD):
         roles_required = ["student_id", "date", "code"] + (
             ["period"] if shape == Shape.PERIOD else []
         )
-        roles_optional = ["name", "grade"]
+        roles_optional = ["name", "grade", "ethnicity", "gender"]
     else:
         roles_required = ["student_id"]
         roles_optional = [
             "days_enrolled", "days_absent", "days_tardy", "attendance_pct",
-            "days_excused", "days_unexcused", "name", "grade",
+            "days_excused", "days_unexcused", "name", "grade", "ethnicity",
+            "gender",
         ]
     cols = st.columns(3)
     for i, role in enumerate(roles_required + roles_optional):
@@ -370,6 +398,14 @@ def _report_section() -> bool:
         if shape == Shape.SUMMARY:
             state.set_setup("observed_codes", {})
             state.set_setup("codes_done", True)
+        elif shape == Shape.PERIOD_WIDE:
+            observed: dict[str, int] = {}
+            for column in detection.period_wide_columns(frame):
+                for code, count in detection.observed_code_counts(
+                    frame[column]
+                ).items():
+                    observed[code] = observed.get(code, 0) + count
+            state.set_setup("observed_codes", observed)
         else:
             observed = detection.observed_code_counts(frame[chosen["code"]])
             state.set_setup("observed_codes", observed)
@@ -506,6 +542,65 @@ def _codes_section() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Optional — course/teacher context report
+# ---------------------------------------------------------------------------
+
+
+def _course_context_section() -> None:
+    with st.expander(
+        "Optional: course / teacher context report (for by-course, by-teacher "
+        "and by-counselor breakdowns)"
+    ):
+        st.caption(
+            "The per-class export with one row per student per course and one "
+            "count column per code ('CUT - (Unexcused)', …). Entirely "
+            "optional — skip it if you don't have one."
+        )
+        data, filename = _uploaded_file(
+            "course",
+            "Course context report (CSV or Excel)",
+            "Adds course, teacher, and counselor breakdowns on top of the "
+            "main attendance report.",
+        )
+        if data is None:
+            return
+        frame, result = _cached_detect_course(data, filename)
+        components.warnings_panel(result.warnings)
+        st.dataframe(frame.head(5), hide_index=True)
+        columns = [str(c) for c in frame.columns]
+        cols = st.columns(3)
+        chosen: dict[str, str | None] = {}
+        for i, role in enumerate(
+            ["student_id", "course", "teacher", "counselor", "section"]
+        ):
+            with cols[i % 3]:
+                chosen[role] = _role_selectbox(
+                    {
+                        "student_id": "Student ID",
+                        "course": "Course title",
+                        "teacher": "Teacher",
+                        "counselor": "Counselor",
+                        "section": "Section",
+                    }[role],
+                    columns,
+                    result.mapping.get(role),
+                    f"course_map_{role}",
+                    required=role == "student_id",
+                )
+        if state.get_setup("course_done"):
+            st.success("Course context confirmed — it's applied when you finish setup.")
+        if st.button("Confirm course context", key="confirm_course"):
+            mapping = ColumnMapping(
+                shape=Shape.UNKNOWN,
+                columns={role: col for role, col in chosen.items() if col},
+            )
+            state.set_setup("course_frame", frame)
+            state.set_setup("course_mapping", mapping)
+            state.set_setup("course_done", True)
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Section 4 — match & finish
 # ---------------------------------------------------------------------------
 
@@ -537,6 +632,17 @@ def _finish_section() -> None:
         help="Recommended: treats 004512 and 4512 as the same student. Turn "
         "off only if your school's IDs really differ by leading zeros.",
     )
+    assume_perfect = False
+    if shape == Shape.PERIOD_WIDE:
+        assume_perfect = st.toggle(
+            "Count students with no attendance marks as perfect attendance",
+            value=True,
+            key="assume_perfect",
+            help="This kind of report only lists days with marks, so a "
+            "student with flawless attendance never appears in it at all. "
+            "Review the list below to make sure it isn't an ID mismatch; "
+            "turn this off to treat them as unmatched instead.",
+        )
     report_ids = normalize.normalize_id_series(
         frame[mapping.columns["student_id"]]
     ).dropna()
@@ -545,22 +651,32 @@ def _finish_section() -> None:
 
     matched = int(join.students["matched"].sum())
     total = len(join.students)
+    missing = total - matched
+    unmatched_display = join.unmatched.rename(
+        columns={"student_id": "Student ID", "name": "Name", "hint": "Hint"}
+    )
     if matched == 0:
         st.error(
             "None of your caseload students were found in the report. Check "
             "that both files use the same student-ID system."
         )
-    elif matched < total:
+        if not join.unmatched.empty:
+            st.dataframe(unmatched_display, hide_index=True)
+    elif missing and assume_perfect:
+        st.success(
+            f"All **{total}** caseload students accounted for — {matched} "
+            f"with attendance marks, {missing} with none (counted as "
+            "perfect attendance)."
+        )
+        with st.expander(f"Review the {missing} perfect-attendance student(s)"):
+            st.dataframe(
+                unmatched_display[["Student ID", "Name"]], hide_index=True
+            )
+    elif missing:
         st.warning(f"**{matched} of {total}** caseload students matched.")
+        st.dataframe(unmatched_display, hide_index=True)
     else:
         st.success(f"All **{total}** caseload students were found in the report.")
-    if not join.unmatched.empty:
-        st.dataframe(
-            join.unmatched.rename(
-                columns={"student_id": "Student ID", "name": "Name", "hint": "Hint"}
-            ),
-            hide_index=True,
-        )
     st.caption(
         f"Schoolwide baseline will be computed from "
         f"{join.report_only_count + matched:,} students in the report."
@@ -568,15 +684,17 @@ def _finish_section() -> None:
 
     enrolled_override = None
     threshold = DEFAULT_ABSENT_DAY_THRESHOLD
-    if shape in (Shape.DAILY, Shape.PERIOD):
+    if shape in (Shape.DAILY, Shape.PERIOD, Shape.PERIOD_WIDE):
         observed = state.get_setup("observed_codes", {})
-        share = _present_like_share(observed, code_map)
-        if share < EXCEPTION_REPORT_PRESENT_SHARE:
+        needs_school_days = shape == Shape.PERIOD_WIDE or (
+            _present_like_share(observed, code_map) < EXCEPTION_REPORT_PRESENT_SHARE
+        )
+        if needs_school_days:
             st.warning(
-                "This report looks like an **absences-only** export (it has "
-                "almost no 'present' rows), so total school days can't be "
-                "counted from it. Enter how many school days there have been "
-                "so far this year.",
+                "This report only lists days with attendance marks, so total "
+                "school days can't be counted from it. Enter how many school "
+                "days there have been so far this year — rates and tiers "
+                "depend on it.",
                 icon="📅",
             )
             enrolled_override = int(
@@ -588,7 +706,7 @@ def _finish_section() -> None:
                     key="enrolled_override",
                 )
             )
-        if shape == Shape.PERIOD:
+        if shape in (Shape.PERIOD, Shape.PERIOD_WIDE):
             with st.expander("Advanced: what counts as an absent day?"):
                 threshold = st.slider(
                     "A day counts as absent when at least this share of the "
@@ -611,6 +729,9 @@ def _finish_section() -> None:
                 absent_day_threshold=threshold,
                 enrolled_override=enrolled_override,
                 prebuilt_students=students,
+                assume_perfect_attendance=assume_perfect and matched > 0,
+                course_frame=state.get_setup("course_frame"),
+                course_mapping=state.get_setup("course_mapping"),
             )
         state.set_bundle(bundle, warnings)
         overview = st.session_state.get("_pages", {}).get("overview")
@@ -623,7 +744,7 @@ def _finish_section() -> None:
 
 
 def render() -> None:
-    st.title("📥 Upload & Setup")
+    st.title("Upload & Setup")
     st.caption(
         "Everything runs locally and stays in memory — uploaded student data "
         "is never written to disk or sent anywhere."
@@ -638,6 +759,8 @@ def render() -> None:
         if _report_section():
             st.divider()
             if _codes_section():
+                st.divider()
+                _course_context_section()
                 st.divider()
                 _finish_section()
     st.divider()

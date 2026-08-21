@@ -27,7 +27,7 @@ def _student_options(metrics: pd.DataFrame) -> tuple[list[str], dict[str, str]]:
 
 def render() -> None:
     bundle = state.bundle()
-    st.title("🧑‍🎓 Student")
+    st.title("Student")
     metrics = bundle.metrics
     options, labels = _student_options(metrics)
     if not options:

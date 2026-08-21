@@ -26,7 +26,7 @@ def _caseload_weekday_rates(day_status: pd.DataFrame) -> pd.DataFrame:
 
 def render() -> None:
     bundle = state.bundle()
-    st.title("📅 Patterns")
+    st.title("Patterns")
     if not components.require(bundle, "day_of_week"):
         return
 

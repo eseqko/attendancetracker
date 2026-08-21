@@ -71,6 +71,7 @@ class DataBundle:
     summary: pd.DataFrame | None = None  # summary shape only
     day_status: pd.DataFrame | None = None  # derived from events
     code_map: CodeMap | None = None
+    course_marks: pd.DataFrame | None = None  # optional course-context upload
 
     def has(self, capability: Capability) -> bool:
         return capability in self.capabilities

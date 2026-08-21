@@ -344,6 +344,133 @@ def render_period_report(
     ).reset_index(drop=True)
 
 
+#: Letter code -> ATP201 period-cell word.
+ATP201_CODE_WORDS = {"A": "Unverified", "E": "Ilness", "T": "Unx.Tardy"}
+ATP201_SUFFIX_BY_WEEKDAY = {0: "MFonly", 1: "D2S", 2: "W2122", 3: "D2S", 4: "MFonly"}
+FAKE_ETHNICITIES = ["Hispanic", "White", "Asian", "Black", "Declined to state"]
+FAKE_GENDERS = ["F", "M", "X"]
+
+#: Fake course + teacher per simulated period, for the course-context report.
+FAKE_COURSES = {
+    1: ("English 9", "Riley Reader"),
+    2: ("Algebra I", "Morgan Mathers"),
+    3: ("Biology", "Sam Science"),
+    4: ("World History", "Harper Historian"),
+    5: ("PE", "Casey Coach"),
+    6: ("Art", "Alex Artiste"),
+    7: ("Study Skills", "Jordan Guide"),
+}
+
+
+def render_atp201_report(
+    roster: pd.DataFrame, period_events: pd.DataFrame
+) -> pd.DataFrame:
+    """Synergy ATP201-style report: one row per student per day with marks,
+    one column per period, code words in cells, blank = present.
+
+    Mirrors the real export closely on purpose: dates carry schedule-type
+    suffixes like '(D2S)', and the demographic/family-contact columns are
+    FILLED with obviously fake values — the real file has them populated, and
+    detection must not trip over a Birth Date full of dates or a phone number
+    that looks like an ID.
+    """
+    names = roster.set_index("student_id")
+    marks = period_events[period_events["code"] != "P"].copy()
+    marks["word"] = marks["code"].map(ATP201_CODE_WORDS)
+    wide = marks.pivot_table(
+        index=["student_id", "date"], columns="period", values="word", aggfunc="first"
+    ).reindex(columns=range(1, PERIODS_PER_DAY + 1))
+
+    rows: list[dict[str, object]] = []
+    for (student_id, date), row in wide.iterrows():
+        info = names.loc[student_id]
+        suffix = ATP201_SUFFIX_BY_WEEKDAY.get(date.weekday(), "D2S")
+        record: dict[str, object] = {
+            "School Name": "Jefferson Example High",
+            "School Year": "2025-2026",
+            "Student Name": f"{info['last_name']}, {info['first_name']}",
+            "Legal Formatted Name": f"{info['last_name']}, {info['first_name']}",
+            "Nick Name": str(info["first_name"]),
+            "Last Name Goes By": str(info["last_name"]),
+            "Ethnicity": FAKE_ETHNICITIES[int(student_id) % len(FAKE_ETHNICITIES)],
+            "Original Enter Date": None,
+            "Final Withdrawal Date": None,
+            "Sis Number": str(student_id),
+            "Grade": str(info["grade"]),
+            "Date": f"{date.strftime('%m/%d/%Y')} ({suffix})",
+            "Period 0": None,
+        }
+        for period in range(1, PERIODS_PER_DAY + 1):
+            value = row[period]
+            record[f"Period {period}"] = value if pd.notna(value) else None
+        for period in range(PERIODS_PER_DAY + 1, 11):
+            record[f"Period {period}"] = None
+        record.update(
+            {
+                "Note": None,
+                "Birth Date": "01/15/2012",
+                "Gender": FAKE_GENDERS[int(student_id) % len(FAKE_GENDERS)],
+                "Phone": "555-0100",
+                "Home Language": "English",
+                "Home Address": "1 Example St",
+                "Home City": "Sampletown",
+                "Home State": "CA",
+                "ZIP Code 5": "90000",
+                "ZIP Code 4": "0000",
+                "Relationship 1": "Parent",
+                "Parent Name 1": "Pat Testparent",
+                "Phone Type 1": "Cell",
+                "Phone 1": "555-0101",
+                "Extension 1": None,
+                "Contact Allowed 1": "Y",
+                "Mailings Allowed1": "Y",
+                "Ed. Rights 1": "Y",
+                "Lives With 1": "Y",
+                "Has Custody 1": "Y",
+            }
+        )
+        rows.append(record)
+    return pd.DataFrame(rows)
+
+
+def render_course_context(
+    roster: pd.DataFrame, period_events: pd.DataFrame
+) -> pd.DataFrame:
+    """ATC-style course-context report: one row per student x course section,
+    one count column per attendance code, plus a Total Absences column that
+    follows the district's rules (present-like ACT/OFF excluded)."""
+    names = roster.set_index("student_id")
+    marks = period_events[period_events["code"] != "P"]
+    counts = (
+        marks.groupby(["student_id", "period", "code"], observed=True)
+        .size()
+        .unstack("code", fill_value=0)
+        .reindex(columns=["A", "E", "T"], fill_value=0)
+        .reset_index()
+    )
+    rows: list[dict[str, object]] = []
+    for record in counts.itertuples(index=False):
+        info = names.loc[record.student_id]
+        course, teacher = FAKE_COURSES[int(record.period)]
+        rows.append(
+            {
+                "Student ID": str(record.student_id),
+                "First Name": str(info["first_name"]),
+                "Last Name": str(info["last_name"]),
+                "Counselor Name": str(info["case_manager"]),
+                "Course Title": course,
+                "Section ID": f"{record.period}-101",
+                "Teacher Name": teacher,
+                "UNV - (Unverified)": int(record.A),
+                "ILL - (Excused)": int(record.E),
+                "UTY - (Unexcused Tardy)": int(record.T),
+                "ACT - (Excused)": 0,
+                "Total Absences": int(record.A) + int(record.E),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def with_preamble(frame: pd.DataFrame, lines: list[str]) -> pd.DataFrame:
     """Prepend SIS-style title/preamble rows above the real header.
 
@@ -405,6 +532,8 @@ def build_dataset(
         ),
         "report_summary": render_summary_report(roster, summary),
         "report_period": render_period_report(roster, period_events),
+        "report_atp201": render_atp201_report(roster, period_events),
+        "report_course_context": render_course_context(roster, period_events),
     }
 
 
@@ -448,4 +577,8 @@ def write_demo_files(outdir: str | Path, seed: int = 42) -> list[Path]:
     save(data["report_summary"], "report_summary")
     # Period report is large (~300k rows); CSV only.
     save(data["report_period"], "report_period", xlsx=False)
+    atp201_path = outdir / "report_atp201.xlsx"
+    data["report_atp201"].to_excel(atp201_path, index=False)
+    written.append(atp201_path)
+    save(data["report_course_context"], "report_course_context", xlsx=False)
     return written

@@ -13,17 +13,17 @@ import plotly.graph_objects as go
 
 from attendance_tracker.constants import TIER_LABELS, TIER_ORDER, Tier
 
-# Ink & chrome (light surface)
-INK = "#0b0b0b"
-INK_SECONDARY = "#52514e"
-MUTED = "#898781"
-GRID = "#e1e0d9"
-AXIS = "#c3c2b7"
+# Ink & chrome (light surface, Apple-neutral)
+INK = "#1d1d1f"
+INK_SECONDARY = "#6e6e73"
+MUTED = "#86868b"
+GRID = "#e8e8ed"
+AXIS = "#d2d2d7"
 
 # Series roles
-BLUE = "#2a78d6"  # primary measure
-BLUE_LIGHT = "#86b6ef"  # secondary line (rolling average)
-BASELINE_GRAY = "#a9a8a1"  # schoolwide reference
+BLUE = "#0071e3"  # primary measure (accent)
+BLUE_LIGHT = "#8ec0f2"  # secondary line (rolling average)
+BASELINE_GRAY = "#aeaeb2"  # schoolwide reference
 
 # Status palette — tiers are states (good/warning/serious/critical)
 TIER_COLORS: dict[str, str] = {
@@ -35,7 +35,7 @@ TIER_COLORS: dict[str, str] = {
 
 # Calendar day statuses — states; present recedes toward the surface
 DAY_STATUS_COLORS: dict[str, str] = {
-    "present": "#e7ebe4",
+    "present": "#eceef1",
     "tardy": "#fab219",
     "partial": "#f6c6ae",
     "absent_excused": "#ec835a",
@@ -51,7 +51,10 @@ DAY_STATUS_LABELS: dict[str, str] = {
 
 WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
-FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+FONT = (
+    '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, '
+    '"Helvetica Neue", Arial, sans-serif'
+)
 
 
 def _base_layout(fig: go.Figure, height: int = 320) -> go.Figure:
@@ -59,7 +62,7 @@ def _base_layout(fig: go.Figure, height: int = 320) -> go.Figure:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=FONT, color=INK_SECONDARY, size=13),
-        margin=dict(l=8, r=8, t=8, b=8),
+        margin=dict(l=8, r=8, t=16, b=8),
         height=height,
         hoverlabel=dict(font_family=FONT),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
@@ -196,9 +199,13 @@ def weekly_rate_line(weekly: pd.DataFrame, rolling_weeks: int = 4) -> go.Figure:
 
 
 def rate_comparison_bars(
-    frame: pd.DataFrame, label_col: str, rate_col: str = "mean_attendance_rate"
+    frame: pd.DataFrame,
+    label_col: str,
+    rate_col: str = "mean_attendance_rate",
+    axis_title: str = "Mean attendance rate",
+    full_scale: bool = True,
 ) -> go.Figure:
-    """Single-measure comparison across groups: one hue, direct labels."""
+    """Single-measure rate comparison across groups: one hue, direct labels."""
     fig = go.Figure(
         go.Bar(
             x=frame[label_col].astype(str),
@@ -211,8 +218,75 @@ def rate_comparison_bars(
             width=0.5,
         )
     )
-    fig.update_yaxes(tickformat=".0%", range=[0, 1.08], title_text="Mean attendance rate")
+    fig.update_yaxes(tickformat=".0%", title_text=axis_title)
+    if full_scale:
+        fig.update_yaxes(range=[0, 1.08])
+    else:
+        fig.update_yaxes(rangemode="tozero")
     return _base_layout(fig, height=300)
+
+
+#: Event-category colors for breakdown bars — same state semantics as the
+#: calendar (unexcused=critical, excused=serious, tardy=warning).
+CATEGORY_MEASURE_COLORS = {
+    "unexcused": "#d03b3b",
+    "excused": "#ec835a",
+    "tardies": "#fab219",
+}
+CATEGORY_MEASURE_LABELS = {
+    "unexcused": "Unexcused absences",
+    "excused": "Excused absences",
+    "tardies": "Tardies",
+}
+
+
+def category_stack_bars(frame: pd.DataFrame, label_col: str) -> go.Figure:
+    """Stacked unexcused/excused/tardy counts per label (period, etc.)."""
+    fig = go.Figure()
+    for measure in ("unexcused", "excused", "tardies"):
+        if measure not in frame.columns:
+            continue
+        fig.add_trace(
+            go.Bar(
+                x=frame[label_col].astype(str),
+                y=frame[measure],
+                name=CATEGORY_MEASURE_LABELS[measure],
+                marker=dict(
+                    color=CATEGORY_MEASURE_COLORS[measure],
+                    line=dict(color="#ffffff", width=2),
+                ),
+                hovertemplate="%{x} — "
+                + CATEGORY_MEASURE_LABELS[measure]
+                + ": %{y}<extra></extra>",
+            )
+        )
+    fig.update_layout(barmode="stack")
+    fig.update_yaxes(title_text="Events", rangemode="tozero")
+    return _base_layout(fig, height=300)
+
+
+def top_hbar(
+    frame: pd.DataFrame, label_col: str, value_col: str, axis_title: str,
+    top_n: int = 15,
+) -> go.Figure:
+    """Horizontal top-N bar for long labels (courses, teachers). One hue,
+    worst at the top, direct count labels."""
+    top = frame.nlargest(top_n, value_col).iloc[::-1]
+    fig = go.Figure(
+        go.Bar(
+            x=top[value_col],
+            y=top[label_col].astype(str),
+            orientation="h",
+            marker_color=BLUE,
+            text=top[value_col],
+            textposition="outside",
+            textfont=dict(color=INK),
+            hovertemplate="%{y}: %{x}<extra></extra>",
+        )
+    )
+    fig.update_xaxes(title_text=axis_title, rangemode="tozero")
+    fig.update_yaxes(automargin=True)
+    return _base_layout(fig, height=max(240, 30 * len(top) + 80))
 
 
 def grouped_rate_bars(
@@ -260,7 +334,7 @@ def tier_mix_stacked(group_frame: pd.DataFrame, label_col: str) -> go.Figure:
                 name=TIER_LABELS[tier],
                 marker=dict(
                     color=TIER_COLORS[tier.value],
-                    line=dict(color="rgba(252,252,251,1)", width=2),
+                    line=dict(color="#ffffff", width=2),
                 ),
                 hovertemplate="%{x} — " + TIER_LABELS[tier] + ": %{y}<extra></extra>",
             )
