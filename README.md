@@ -92,7 +92,9 @@ mapped to which field so you can correct it before anything is computed.
 
 ## Attendance report formats
 
-Four layouts are auto-detected (and always confirmed by you before anything is computed):
+Four layouts are auto-detected (and always confirmed by you before anything is computed).
+CSV and Excel files both work — including legacy `.xls` files, which is how Synergy typically
+exports reports:
 
 1. **One row per student per day** — student ID + date + attendance code.
 2. **One row per student** — summary totals (days enrolled / absent / attendance %). Powers
