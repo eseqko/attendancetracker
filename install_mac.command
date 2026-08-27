@@ -32,6 +32,11 @@ echo
 echo "Setting up the app environment — this can take a few minutes"
 echo "the first time. Please leave this window open..."
 echo
+# Always rebuild the environment so repairs and Python upgrades are clean.
+if [ -d .venv ]; then
+    echo "Removing the previous app environment for a clean install..."
+    rm -rf .venv
+fi
 "$PY" -m venv .venv
 ./.venv/bin/python -m pip install --upgrade pip
 ./.venv/bin/python -m pip install -e .

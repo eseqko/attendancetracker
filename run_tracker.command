@@ -5,6 +5,12 @@ if [ ! -x ".venv/bin/python" ]; then
     read -r -p "Press Enter to close..."
     exit 1
 fi
+if ! ./.venv/bin/python -c 'import sys' >/dev/null 2>&1; then
+    echo "The app environment looks broken — please run install_mac.command again."
+    echo "It rebuilds everything cleanly; your saved data is not touched."
+    read -r -p "Press Enter to close..."
+    exit 1
+fi
 # After an update the environment may be missing new pieces — refresh it.
 if ! cmp -s pyproject.toml .venv/pyproject.installed; then
     echo "Finishing an app update — this only happens once per update..."

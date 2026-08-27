@@ -40,6 +40,18 @@ echo.
 echo Setting up the app environment - this can take a few minutes
 echo the first time. Please leave this window open...
 echo.
+rem --- Always rebuild the environment so repairs and Python upgrades are clean
+if exist ".venv" (
+    echo Removing the previous app environment for a clean install...
+    rmdir /s /q .venv
+)
+if exist ".venv" (
+    echo.
+    echo Could not remove the old ".venv" folder. If the Attendance Tracker
+    echo is still running, close its window, then run this installer again.
+    pause
+    exit /b 1
+)
 %PYCMD% -m venv .venv || goto :fail
 ".venv\Scripts\python.exe" -m pip install --upgrade pip || goto :fail
 ".venv\Scripts\python.exe" -m pip install -e . || goto :fail

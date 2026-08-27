@@ -54,8 +54,9 @@ time.
 
 Replace the app's files with the new version (download the ZIP again and copy everything into
 the same folder, or `git pull`), then just launch as usual — the launcher notices the update
-and finishes it automatically. Re-running the installer is always safe too, and fixes any
-half-updated setup.
+and finishes it automatically. Re-running the installer is always safe too — close the app's
+window first — and rebuilds the environment from scratch, fixing any half-updated setup.
+Your saved data (`local_data/`) is never touched.
 
 ## Setup (command line)
 
