@@ -50,6 +50,13 @@ First-time clicks may need a nudge past the safety prompts: on Windows, if Smart
 choose **More info → Run anyway**; on a Mac, right-click the file and choose **Open** the first
 time.
 
+### Updating the app
+
+Replace the app's files with the new version (download the ZIP again and copy everything into
+the same folder, or `git pull`), then just launch as usual — the launcher notices the update
+and finishes it automatically. Re-running the installer is always safe too, and fixes any
+half-updated setup.
+
 ## Setup (command line)
 
 ```bash

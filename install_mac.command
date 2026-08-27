@@ -34,7 +34,8 @@ echo "the first time. Please leave this window open..."
 echo
 "$PY" -m venv .venv
 ./.venv/bin/python -m pip install --upgrade pip
-./.venv/bin/python -m pip install .
+./.venv/bin/python -m pip install -e .
+cp pyproject.toml .venv/pyproject.installed
 
 echo
 echo "============================================"

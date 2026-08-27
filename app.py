@@ -6,6 +6,16 @@ has produced a DataBundle. Run with: streamlit run app.py
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Always run the code that sits in this folder. Without this, a `pip install .`
+# from an earlier version shadows updated modules in src/ and the app crashes
+# with ImportError after an update.
+_SRC = Path(__file__).resolve().parent / "src"
+if _SRC.is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
 import streamlit as st
 
 st.set_page_config(
