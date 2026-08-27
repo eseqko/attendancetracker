@@ -1,6 +1,11 @@
 [browser]
 gatherUsageStats = false
 
+[client]
+# This app runs locally, so always show real error messages — a redacted
+# "error details hidden" box helps no one on their own computer.
+showErrorDetails = "full"
+
 [theme]
 base = "light"
 primaryColor = "#0071e3"

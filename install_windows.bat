@@ -42,7 +42,8 @@ echo the first time. Please leave this window open...
 echo.
 %PYCMD% -m venv .venv || goto :fail
 ".venv\Scripts\python.exe" -m pip install --upgrade pip || goto :fail
-".venv\Scripts\python.exe" -m pip install . || goto :fail
+".venv\Scripts\python.exe" -m pip install -e . || goto :fail
+copy /y pyproject.toml ".venv\pyproject.installed" >nul
 
 echo.
 echo Creating a desktop shortcut...
