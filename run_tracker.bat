@@ -6,6 +6,13 @@ if not exist ".venv\Scripts\python.exe" (
     pause
     exit /b 1
 )
+".venv\Scripts\python.exe" -c "import sys" >nul 2>nul
+if errorlevel 1 (
+    echo The app environment looks broken - please run install_windows.bat again.
+    echo It rebuilds everything cleanly; your saved data is not touched.
+    pause
+    exit /b 1
+)
 rem After an update the environment may be missing new pieces - refresh it.
 fc /b pyproject.toml ".venv\pyproject.installed" >nul 2>nul
 if errorlevel 1 (
