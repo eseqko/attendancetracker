@@ -8,7 +8,14 @@ import pandas as pd
 import streamlit as st
 
 from attendance_tracker import codes as codes_mod
-from attendance_tracker import detection, io_utils, joining, normalize, pipeline
+from attendance_tracker import (
+    detection,
+    io_utils,
+    joining,
+    normalize,
+    pipeline,
+    storage,
+)
 from attendance_tracker.constants import (
     DEFAULT_ABSENT_DAY_THRESHOLD,
     EXCEPTION_REPORT_PRESENT_SHARE,
@@ -240,6 +247,9 @@ def _caseload_section() -> bool:
             return False
         state.set_setup("students", students)
         state.set_setup("students_warnings", warnings)
+        state.set_setup("caseload_mapping", mapping)
+        state.set_setup("caseload_sheet", sheet)
+        state.set_setup("caseload_header_row", result.header_row)
         state.set_setup("caseload_done", True)
         st.rerun()
     return False
@@ -395,23 +405,27 @@ def _report_section() -> bool:
         state.set_setup("report_frame", frame)
         state.set_setup("report_mapping", mapping)
         state.set_setup("report_shape", shape)
+        state.set_setup("report_sheet", sheet)
+        state.set_setup("report_header_row", result.header_row)
+        state.set_setup("observed_codes", _observed_codes_for(frame, mapping))
         if shape == Shape.SUMMARY:
-            state.set_setup("observed_codes", {})
             state.set_setup("codes_done", True)
-        elif shape == Shape.PERIOD_WIDE:
-            observed: dict[str, int] = {}
-            for column in detection.period_wide_columns(frame):
-                for code, count in detection.observed_code_counts(
-                    frame[column]
-                ).items():
-                    observed[code] = observed.get(code, 0) + count
-            state.set_setup("observed_codes", observed)
-        else:
-            observed = detection.observed_code_counts(frame[chosen["code"]])
-            state.set_setup("observed_codes", observed)
         state.set_setup("report_done", True)
         st.rerun()
     return False
+
+
+def _observed_codes_for(frame: pd.DataFrame, mapping: ColumnMapping) -> dict[str, int]:
+    """Observed attendance codes for a confirmed report mapping."""
+    if mapping.shape == Shape.SUMMARY:
+        return {}
+    if mapping.shape == Shape.PERIOD_WIDE:
+        observed: dict[str, int] = {}
+        for column in detection.period_wide_columns(frame):
+            for code, count in detection.observed_code_counts(frame[column]).items():
+                observed[code] = observed.get(code, 0) + count
+        return observed
+    return detection.observed_code_counts(frame[mapping.columns["code"]])
 
 
 # ---------------------------------------------------------------------------
@@ -719,6 +733,16 @@ def _finish_section() -> None:
                     help="The federal chronic-absenteeism convention uses 50%.",
                 )
 
+    remember = st.toggle(
+        "Remember these files and settings on this computer",
+        value=True,
+        key="remember_setup",
+        help="Saves copies of your uploads and this setup into the app's "
+        "local_data folder so next launch skips straight to your data. "
+        "Local only — never synced or shared. 'Forget saved data' below "
+        "erases it.",
+    )
+
     if st.button("Finish setup", type="primary", key="finish_setup"):
         with st.spinner("Crunching the numbers…"):
             bundle, warnings = pipeline.assemble_bundle(
@@ -733,11 +757,150 @@ def _finish_section() -> None:
                 course_frame=state.get_setup("course_frame"),
                 course_mapping=state.get_setup("course_mapping"),
             )
+        if remember:
+            _save_current_setup(
+                ignore_zeros=ignore_zeros,
+                assume_perfect=assume_perfect,
+                enrolled_override=enrolled_override,
+                threshold=threshold,
+            )
         state.set_bundle(bundle, warnings)
         overview = st.session_state.get("_pages", {}).get("overview")
         if overview is not None:
             st.switch_page(overview)
         st.rerun()
+
+
+def _save_current_setup(
+    *,
+    ignore_zeros: bool,
+    assume_perfect: bool,
+    enrolled_override: int | None,
+    threshold: float,
+) -> None:
+    files = {
+        "caseload": (
+            state.get_setup("caseload_bytes"), state.get_setup("caseload_name"),
+        ),
+        "report": (
+            state.get_setup("report_bytes"), state.get_setup("report_name"),
+        ),
+    }
+    if state.get_setup("course_done") and state.get_setup("course_bytes"):
+        files["course"] = (
+            state.get_setup("course_bytes"), state.get_setup("course_name"),
+        )
+    storage.save_profile(
+        files=files,
+        caseload_mapping=state.get_setup("caseload_mapping"),
+        report_mapping=state.get_setup("report_mapping"),
+        course_mapping=state.get_setup("course_mapping"),
+        code_map=state.get_setup("code_map"),
+        settings={
+            "ignore_zeros": ignore_zeros,
+            "assume_perfect": assume_perfect,
+            "enrolled_override": enrolled_override,
+            "threshold": threshold,
+            "caseload_sheet": state.get_setup("caseload_sheet"),
+            "caseload_header_row": state.get_setup("caseload_header_row"),
+            "report_sheet": state.get_setup("report_sheet"),
+            "report_header_row": state.get_setup("report_header_row"),
+        },
+    )
+
+
+def restore_saved_setup() -> bool:
+    """Rebuild the whole session from the saved profile. Called by app.py on a
+    fresh launch; returns True when the bundle was restored. Any failure falls
+    back to the normal wizard with a one-time warning."""
+    profile = storage.load_profile()
+    if profile is None:
+        return False
+    try:
+        settings = profile.settings
+        cl_bytes, cl_name = profile.files["caseload"]
+        cl_frame, _ = io_utils.load_table(
+            cl_bytes, cl_name,
+            sheet=settings.get("caseload_sheet"),
+            header_row=settings.get("caseload_header_row"),
+        )
+        students, student_warnings = normalize.build_students(
+            cl_frame, profile.caseload_mapping
+        )
+        rp_bytes, rp_name = profile.files["report"]
+        rp_frame, _ = io_utils.load_table(
+            rp_bytes, rp_name,
+            sheet=settings.get("report_sheet"),
+            header_row=settings.get("report_header_row"),
+        )
+        course_frame = None
+        if "course" in profile.files and profile.course_mapping is not None:
+            course_bytes, course_name = profile.files["course"]
+            course_frame, _ = io_utils.load_table(course_bytes, course_name)
+        enrolled_override = settings.get("enrolled_override")
+        bundle, warnings = pipeline.assemble_bundle(
+            report_frame=rp_frame,
+            report_mapping=profile.report_mapping,
+            code_map=profile.code_map,
+            force_exact=not settings.get("ignore_zeros", True),
+            absent_day_threshold=settings.get(
+                "threshold", DEFAULT_ABSENT_DAY_THRESHOLD
+            ),
+            enrolled_override=(
+                int(enrolled_override) if enrolled_override is not None else None
+            ),
+            prebuilt_students=students,
+            assume_perfect_attendance=settings.get("assume_perfect", False),
+            course_frame=course_frame,
+            course_mapping=profile.course_mapping,
+        )
+    except Exception:
+        st.session_state["profile_restore_failed"] = True
+        return False
+
+    # Refill the wizard state so every section shows as confirmed/editable.
+    state.set_setup("caseload_bytes", cl_bytes)
+    state.set_setup("caseload_name", cl_name)
+    state.set_setup("caseload_mapping", profile.caseload_mapping)
+    state.set_setup("caseload_sheet", settings.get("caseload_sheet"))
+    state.set_setup("caseload_header_row", settings.get("caseload_header_row"))
+    state.set_setup("students", students)
+    state.set_setup("students_warnings", student_warnings)
+    state.set_setup("caseload_done", True)
+    state.set_setup("report_bytes", rp_bytes)
+    state.set_setup("report_name", rp_name)
+    state.set_setup("report_frame", rp_frame)
+    state.set_setup("report_mapping", profile.report_mapping)
+    state.set_setup("report_shape", profile.report_mapping.shape)
+    state.set_setup("report_sheet", settings.get("report_sheet"))
+    state.set_setup("report_header_row", settings.get("report_header_row"))
+    state.set_setup(
+        "observed_codes", _observed_codes_for(rp_frame, profile.report_mapping)
+    )
+    state.set_setup("code_map", profile.code_map)
+    state.set_setup("codes_done", True)
+    state.set_setup("report_done", True)
+    if course_frame is not None:
+        state.set_setup("course_bytes", profile.files["course"][0])
+        state.set_setup("course_name", profile.files["course"][1])
+        state.set_setup("course_frame", course_frame)
+        state.set_setup("course_mapping", profile.course_mapping)
+        state.set_setup("course_done", True)
+    # Widget defaults so the finish section reflects the saved choices.
+    for widget_key, setting_key, fallback in (
+        ("ignore_zeros", "ignore_zeros", True),
+        ("assume_perfect", "assume_perfect", True),
+    ):
+        st.session_state.setdefault(
+            widget_key, settings.get(setting_key, fallback)
+        )
+    if enrolled_override is not None:
+        st.session_state.setdefault("enrolled_override", int(enrolled_override))
+
+    warnings.append(f"Loaded saved setup from {profile.saved_on}.")
+    state.set_bundle(bundle, warnings)
+    st.session_state["loaded_from_profile"] = profile.saved_on
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -746,8 +909,9 @@ def _finish_section() -> None:
 def render() -> None:
     st.title("Upload & Setup")
     st.caption(
-        "Everything runs locally and stays in memory — uploaded student data "
-        "is never written to disk or sent anywhere."
+        "Everything runs locally and nothing is ever sent anywhere. Data "
+        "stays in memory unless you choose 'Remember on this computer', "
+        "which keeps a local copy you can erase with 'Forget saved data'."
     )
     if state.bundle() is not None:
         st.success(
@@ -764,6 +928,22 @@ def render() -> None:
                 st.divider()
                 _finish_section()
     st.divider()
-    if st.button("Start over (clear all uploaded data)", key="start_over"):
-        state.clear_all()
-        st.rerun()
+    if st.session_state.pop("profile_restore_failed", False):
+        st.warning(
+            "The saved setup on this computer couldn't be loaded (it may be "
+            "from an older version) — set up normally and it will be re-saved.",
+            icon="⚠️",
+        )
+    col_reset, col_forget = st.columns(2)
+    with col_reset:
+        if st.button("Start over (clear this session)", key="start_over"):
+            state.clear_all()
+            st.session_state["suppress_autoload"] = True
+            st.rerun()
+    with col_forget:
+        if storage.has_profile():
+            if st.button("Forget saved data on this computer", key="forget_saved"):
+                storage.clear_profile()
+                st.session_state["suppress_autoload"] = True
+                st.session_state.pop("loaded_from_profile", None)
+                st.rerun()
