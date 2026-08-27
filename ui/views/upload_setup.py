@@ -304,14 +304,17 @@ def _report_section() -> bool:
     data, filename = _uploaded_file(
         "report",
         "Attendance report (CSV or Excel)",
-        "The schoolwide export from your SIS (PowerSchool, Aeries, Infinite "
-        "Campus, …). The app auto-detects the layout; you confirm it below.",
+        "In Synergy, pull the ATP201 student attendance report for the whole "
+        "school and upload the export here. Other SIS exports (PowerSchool, "
+        "Aeries, Infinite Campus, …) work too — the app auto-detects the "
+        "layout; you confirm it below.",
     )
     if data is None:
         st.info(
-            "Upload the attendance report for the whole school — it will be "
-            "filtered down to your caseload, and the rest is used only for the "
-            "schoolwide baseline.",
+            "Pull the **ATP201** report from Synergy — run it schoolwide, not "
+            "just your caseload, and upload the export as-is. It will be "
+            "filtered down to your students; the rest is used only for the "
+            "schoolwide baseline. Other SIS attendance exports work too.",
             icon="🏫",
         )
         return False
@@ -410,6 +413,8 @@ def _report_section() -> bool:
         state.set_setup("observed_codes", _observed_codes_for(frame, mapping))
         if shape == Shape.SUMMARY:
             state.set_setup("codes_done", True)
+        # A new report means a new date range: re-detect school days from it.
+        st.session_state.pop("enrolled_override", None)
         state.set_setup("report_done", True)
         st.rerun()
     return False
@@ -704,19 +709,34 @@ def _finish_section() -> None:
             _present_like_share(observed, code_map) < EXCEPTION_REPORT_PRESENT_SHARE
         )
         if needs_school_days:
-            st.warning(
-                "This report only lists days with attendance marks, so total "
-                "school days can't be counted from it. Enter how many school "
-                "days there have been so far this year — rates and tiers "
-                "depend on it.",
-                icon="📅",
+            detected = normalize.report_dates(frame, mapping)
+            if len(detected):
+                first, last = detected[0], detected[-1]
+                st.info(
+                    f"**{len(detected)} school days detected** — the distinct "
+                    f"dates with attendance marks anywhere in the school, "
+                    f"{first:%b} {first.day} through {last:%b} {last.day}, "
+                    f"{last.year}. Prefilled below; adjust it only if a day "
+                    f"had no marks schoolwide (rare) or the report doesn't "
+                    f"cover the whole year so far.",
+                    icon="📅",
+                )
+            else:
+                st.warning(
+                    "This report only lists days with attendance marks, so "
+                    "total school days can't be counted from it. Enter how "
+                    "many school days there have been so far this year — "
+                    "rates and tiers depend on it.",
+                    icon="📅",
+                )
+            st.session_state.setdefault(
+                "enrolled_override", len(detected) if len(detected) else 90
             )
             enrolled_override = int(
                 st.number_input(
                     "School days so far this year",
                     min_value=1,
                     max_value=260,
-                    value=90,
                     key="enrolled_override",
                 )
             )

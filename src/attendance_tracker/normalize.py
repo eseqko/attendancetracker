@@ -203,6 +203,22 @@ def build_events(
 _DATE_PREFIX_RE = r"^\s*([0-9][0-9/\-\.]*)"
 
 
+def report_dates(frame: pd.DataFrame, mapping: ColumnMapping) -> pd.DatetimeIndex:
+    """Sorted distinct calendar dates appearing in a report's date column.
+
+    In a schoolwide exception report, every school day has at least one mark
+    from someone in the school, so the count of these dates doubles as the
+    number of school days elapsed. Schedule-type suffixes like
+    '08/07/2026 (D2S)' are stripped; unparseable cells are ignored.
+    """
+    column = mapping.columns.get("date")
+    if column is None or column not in frame.columns:
+        return pd.DatetimeIndex([])
+    text = frame[column].astype("string").str.extract(_DATE_PREFIX_RE)[0]
+    dates = pd.to_datetime(text, errors="coerce").dropna().dt.normalize()
+    return pd.DatetimeIndex(sorted(dates.unique()))
+
+
 def build_events_wide(
     frame: pd.DataFrame, mapping: ColumnMapping, code_map: CodeMap
 ) -> tuple[pd.DataFrame, list[str]]:

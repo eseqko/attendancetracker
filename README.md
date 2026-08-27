@@ -110,9 +110,11 @@ exports reports:
 
    Every other ATP201 column — names, birth date, ethnicity, addresses, phone numbers, parent
    and family contacts — is **ignored at parse time and never enters the analysis data**.
-   ATP201 is an *exception report* (only days with marks appear), so setup asks for the number
-   of school days so far; unlisted days count as present, and a caseload student with no marks
-   at all shows as unmatched — that usually just means perfect attendance. Following the
+   ATP201 is an *exception report* (only days with marks appear), so setup needs the number of
+   school days so far — it detects this itself by counting the distinct dates that appear
+   anywhere in the schoolwide report (every school day, someone has a mark) and prefills the
+   value for you to confirm or adjust. Unlisted days count as present, and a caseload student
+   with no marks at all shows as unmatched — that usually just means perfect attendance. Following the
    district's own counting rules, `Activity` and `Office Ex` are treated as present-like, and
    tardies never count as absences. `Ethnicity` and `Gender` columns are used (only) as
    breakdown dimensions when present.
