@@ -710,17 +710,32 @@ def _finish_section() -> None:
         )
         if needs_school_days:
             detected = normalize.report_dates(frame, mapping)
+            today = pd.Timestamp.today().normalize()
+            future = detected[detected > today]
+            detected = detected[detected <= today]
             if len(detected):
                 first, last = detected[0], detected[-1]
-                st.info(
+                message = (
                     f"**{len(detected)} school days detected** — the distinct "
                     f"dates with attendance marks anywhere in the school, "
                     f"{first:%b} {first.day} through {last:%b} {last.day}, "
-                    f"{last.year}. Prefilled below; adjust it only if a day "
-                    f"had no marks schoolwide (rare) or the report doesn't "
-                    f"cover the whole year so far.",
-                    icon="📅",
+                    f"{last.year}."
                 )
+                if len(future):
+                    far = future[-1]
+                    message += (
+                        f" The report also holds marks on {len(future)} "
+                        f"future date(s) (through {far:%b} {far.day}, "
+                        f"{far.year}) — pre-scheduled absences or activities. "
+                        f"Those are left out of every analysis until they "
+                        f"happen."
+                    )
+                message += (
+                    " Prefilled below; adjust it only if a day had no marks "
+                    "schoolwide (rare) or the report doesn't cover the whole "
+                    "year so far."
+                )
+                st.info(message, icon="📅")
             else:
                 st.warning(
                     "This report only lists days with attendance marks, so "

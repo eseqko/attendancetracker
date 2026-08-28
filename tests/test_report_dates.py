@@ -46,6 +46,51 @@ def test_report_dates_empty_without_date_column():
     assert len(normalize.report_dates(frame, mapping)) == 0
 
 
+def _future_str(days=30):
+    return (
+        pd.Timestamp.today().normalize() + pd.Timedelta(days=days)
+    ).strftime("%m/%d/%Y")
+
+
+def test_future_marks_dropped_from_wide_events():
+    """Synergy allows pre-scheduled marks; a mark that hasn't happened yet
+    must not count as an absence taken."""
+    frame = pd.DataFrame(
+        {
+            "Sis Number": ["1", "1"],
+            "Date": ["09/08/2025 (D2S)", f"{_future_str()} (D2S)"],
+            "Period 1": ["UNVERIFIED", "ILNESS"],
+            "Period 2": [None, None],
+        }
+    )
+    mapping = ColumnMapping(
+        shape=Shape.PERIOD_WIDE,
+        columns={"student_id": "Sis Number", "date": "Date"},
+    )
+    code_map = codes_mod.propose_code_map({"UNVERIFIED": 1, "ILNESS": 1})
+    events, warnings = normalize.build_events_wide(frame, mapping, code_map)
+    assert list(events["date"]) == [pd.Timestamp("2025-09-08")]
+    assert any("future" in w.lower() for w in warnings)
+
+
+def test_future_marks_dropped_from_daily_events():
+    frame = pd.DataFrame(
+        {
+            "ID": ["1", "1"],
+            "Date": ["09/08/2025", _future_str()],
+            "Code": ["A", "A"],
+        }
+    )
+    mapping = ColumnMapping(
+        shape=Shape.DAILY,
+        columns={"student_id": "ID", "date": "Date", "code": "Code"},
+    )
+    code_map = codes_mod.propose_code_map({"A": 2})
+    events, warnings = normalize.build_events(frame, mapping, code_map)
+    assert list(events["date"]) == [pd.Timestamp("2025-09-08")]
+    assert any("future" in w.lower() for w in warnings)
+
+
 def test_report_dates_matches_atp201_event_calendar(
     small_dataset, as_xlsx_bytes
 ):
