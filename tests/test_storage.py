@@ -99,6 +99,18 @@ def test_clear_profile(tmp_path, small_dataset, as_xlsx_bytes, as_csv_bytes):
     storage.clear_profile(tmp_path)
 
 
+def test_ui_prefs_round_trip_and_tolerance(tmp_path):
+    assert storage.load_ui_prefs(tmp_path) == {}
+    storage.save_ui_prefs({"menu_position": "top"}, tmp_path)
+    assert storage.load_ui_prefs(tmp_path) == {"menu_position": "top"}
+    (tmp_path / storage.UI_PREFS_FILENAME).write_text("{broken")
+    assert storage.load_ui_prefs(tmp_path) == {}
+    # Forgetting saved student data must not erase UI preferences.
+    storage.save_ui_prefs({"menu_position": "right"}, tmp_path)
+    storage.clear_profile(tmp_path)
+    assert storage.load_ui_prefs(tmp_path) == {"menu_position": "right"}
+
+
 def test_restored_profile_assembles_identically(
     tmp_path, small_dataset, as_xlsx_bytes, as_csv_bytes
 ):

@@ -41,13 +41,13 @@ h3 {{
     font-size: 0.86rem;
 }}
 
-/* ---- hide Streamlit chrome ---------------------------------------- */
-#MainMenu, footer, [data-testid="stToolbar"], .stDeployButton,
-[data-testid="stDecoration"], [data-testid="stStatusWidget"] {{
+/* ---- hide Streamlit chrome (all menu positions) -------------------- */
+#MainMenu, footer, .stDeployButton, [data-testid="stDecoration"],
+[data-testid="stStatusWidget"], [data-testid="stAppDeployButton"],
+[data-testid="stMainMenu"], [data-testid="stToolbarActions"] {{
     display: none !important;
     visibility: hidden !important;
 }}
-.stApp > header {{ background: transparent; height: 0; }}
 .block-container {{ padding-top: 2.4rem; max-width: 62rem; }}
 
 /* ---- sidebar ------------------------------------------------------- */
@@ -141,6 +141,78 @@ hr {{ border-color: #e8e8ed; margin: 1.6rem 0; }}
 </style>
 """
 
+#: Sidebar menu (left/right): no visible header, and the menu is pinned —
+#: the collapse chevron is removed so the menu can't disappear. If Streamlit
+#: still auto-collapses it (narrow window), the reopen button is forced
+#: visible and floated so there is always a way back.
+_SIDEBAR_MODE_CSS = """
+<style>
+[data-testid="stToolbar"] { display: none !important; }
+.stApp > header { background: transparent; height: 0; }
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
+[data-testid="stExpandSidebarButton"] {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    position: fixed;
+    top: 0.7rem;
+    left: 0.7rem;
+    z-index: 9999;
+    background: #ffffff;
+    border: 1px solid #e8e8ed;
+    border-radius: 10px;
+    padding: 0.25rem;
+}
+</style>
+"""
 
-def inject() -> None:
+_RIGHT_MODE_CSS = """
+<style>
+[data-testid="stAppViewContainer"] { flex-direction: row-reverse; }
+[data-testid="stSidebar"] {
+    border-right: none;
+    border-left: 1px solid #e8e8ed;
+}
+[data-testid="stExpandSidebarButton"] { left: auto; right: 0.7rem; }
+</style>
+"""
+
+#: Top-bar menu: the nav links render inside the header toolbar, so the
+#: toolbar must stay visible (its buttons are hidden individually above).
+_TOP_MODE_CSS = """
+<style>
+[data-testid="stHeader"] {
+    background: #ffffff;
+    border-bottom: 1px solid #e8e8ed;
+}
+[data-testid="stTopNavLink"] { border-radius: 10px; }
+[data-testid="stTopNavLink"] span { font-weight: 500; }
+.block-container { padding-top: 4.8rem; }
+</style>
+"""
+
+_BOTTOM_MODE_CSS = """
+<style>
+[data-testid="stHeader"] {
+    top: auto !important;
+    bottom: 0 !important;
+    border-top: 1px solid #e8e8ed;
+    border-bottom: none;
+}
+.block-container { padding-top: 2.4rem; padding-bottom: 6rem; }
+</style>
+"""
+
+MENU_POSITIONS = ("left", "top", "bottom", "right")
+
+
+def inject(menu_position: str = "left") -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
+    if menu_position in ("top", "bottom"):
+        st.markdown(_TOP_MODE_CSS, unsafe_allow_html=True)
+        if menu_position == "bottom":
+            st.markdown(_BOTTOM_MODE_CSS, unsafe_allow_html=True)
+    else:
+        st.markdown(_SIDEBAR_MODE_CSS, unsafe_allow_html=True)
+        if menu_position == "right":
+            st.markdown(_RIGHT_MODE_CSS, unsafe_allow_html=True)

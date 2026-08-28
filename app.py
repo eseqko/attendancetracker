@@ -24,9 +24,17 @@ st.set_page_config(
     layout="wide",
 )
 
+from attendance_tracker import storage  # noqa: E402
 from ui import state, theme  # noqa: E402
 
-theme.inject()
+if "menu_position" not in st.session_state:
+    saved = storage.load_ui_prefs().get("menu_position")
+    st.session_state["menu_position"] = (
+        saved if saved in theme.MENU_POSITIONS else "left"
+    )
+menu_position = st.session_state["menu_position"]
+
+theme.inject(menu_position)
 
 from ui.views import upload_setup as _setup_view  # noqa: E402
 
@@ -88,16 +96,22 @@ if state.bundle() is not None:
 
 st.session_state["_pages"] = registry
 
-with st.sidebar:
-    bundle = state.bundle()
-    if bundle is not None:
-        matched = int(bundle.metrics["matched"].sum())
-        st.caption(f"{matched} caseload students loaded")
-        saved_on = st.session_state.get("loaded_from_profile")
-        if saved_on:
-            st.caption(f"Saved setup from {saved_on} — change it in Upload & Setup")
-    st.caption(
-        "Data stays on this computer and is never sent anywhere."
-    )
+if menu_position in ("left", "right"):
+    with st.sidebar:
+        bundle = state.bundle()
+        if bundle is not None:
+            matched = int(bundle.metrics["matched"].sum())
+            st.caption(f"{matched} caseload students loaded")
+            saved_on = st.session_state.get("loaded_from_profile")
+            if saved_on:
+                st.caption(
+                    f"Saved setup from {saved_on} — change it in Upload & Setup"
+                )
+        st.caption(
+            "Data stays on this computer and is never sent anywhere."
+        )
 
-st.navigation(pages).run()
+st.navigation(
+    pages,
+    position="top" if menu_position in ("top", "bottom") else "sidebar",
+).run()

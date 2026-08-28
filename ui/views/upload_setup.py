@@ -304,14 +304,17 @@ def _report_section() -> bool:
     data, filename = _uploaded_file(
         "report",
         "Attendance report (CSV or Excel)",
-        "The schoolwide export from your SIS (PowerSchool, Aeries, Infinite "
-        "Campus, …). The app auto-detects the layout; you confirm it below.",
+        "In Synergy, pull the ATP201 student attendance report for the whole "
+        "school and upload the export here. Other SIS exports (PowerSchool, "
+        "Aeries, Infinite Campus, …) work too — the app auto-detects the "
+        "layout; you confirm it below.",
     )
     if data is None:
         st.info(
-            "Upload the attendance report for the whole school — it will be "
-            "filtered down to your caseload, and the rest is used only for the "
-            "schoolwide baseline.",
+            "Pull the **ATP201** report from Synergy — run it schoolwide, not "
+            "just your caseload, and upload the export as-is. It will be "
+            "filtered down to your students; the rest is used only for the "
+            "schoolwide baseline. Other SIS attendance exports work too.",
             icon="🏫",
         )
         return False
@@ -410,6 +413,8 @@ def _report_section() -> bool:
         state.set_setup("observed_codes", _observed_codes_for(frame, mapping))
         if shape == Shape.SUMMARY:
             state.set_setup("codes_done", True)
+        # A new report means a new date range: re-detect school days from it.
+        st.session_state.pop("enrolled_override", None)
         state.set_setup("report_done", True)
         st.rerun()
     return False
@@ -704,19 +709,49 @@ def _finish_section() -> None:
             _present_like_share(observed, code_map) < EXCEPTION_REPORT_PRESENT_SHARE
         )
         if needs_school_days:
-            st.warning(
-                "This report only lists days with attendance marks, so total "
-                "school days can't be counted from it. Enter how many school "
-                "days there have been so far this year — rates and tiers "
-                "depend on it.",
-                icon="📅",
+            detected = normalize.report_dates(frame, mapping)
+            today = pd.Timestamp.today().normalize()
+            future = detected[detected > today]
+            detected = detected[detected <= today]
+            if len(detected):
+                first, last = detected[0], detected[-1]
+                message = (
+                    f"**{len(detected)} school days detected** — the distinct "
+                    f"dates with attendance marks anywhere in the school, "
+                    f"{first:%b} {first.day} through {last:%b} {last.day}, "
+                    f"{last.year}."
+                )
+                if len(future):
+                    far = future[-1]
+                    message += (
+                        f" The report also holds marks on {len(future)} "
+                        f"future date(s) (through {far:%b} {far.day}, "
+                        f"{far.year}) — pre-scheduled absences or activities. "
+                        f"Those are left out of every analysis until they "
+                        f"happen."
+                    )
+                message += (
+                    " Prefilled below; adjust it only if a day had no marks "
+                    "schoolwide (rare) or the report doesn't cover the whole "
+                    "year so far."
+                )
+                st.info(message, icon="📅")
+            else:
+                st.warning(
+                    "This report only lists days with attendance marks, so "
+                    "total school days can't be counted from it. Enter how "
+                    "many school days there have been so far this year — "
+                    "rates and tiers depend on it.",
+                    icon="📅",
+                )
+            st.session_state.setdefault(
+                "enrolled_override", len(detected) if len(detected) else 90
             )
             enrolled_override = int(
                 st.number_input(
                     "School days so far this year",
                     min_value=1,
                     max_value=260,
-                    value=90,
                     key="enrolled_override",
                 )
             )
@@ -915,7 +950,7 @@ def render() -> None:
     )
     if state.bundle() is not None:
         st.success(
-            "Setup is complete — the analysis pages are in the sidebar. "
+            "Setup is complete — the analysis pages are in the menu. "
             "Upload a different file below at any time."
         )
     if _caseload_section():
@@ -947,3 +982,35 @@ def render() -> None:
                 st.session_state["suppress_autoload"] = True
                 st.session_state.pop("loaded_from_profile", None)
                 st.rerun()
+    _menu_position_control()
+
+
+_MENU_POSITION_LABELS = {
+    "left": "Left (default)",
+    "top": "Top",
+    "bottom": "Bottom",
+    "right": "Right",
+}
+
+
+def _menu_position_control() -> None:
+    """Where the page menu lives; the choice is remembered on this computer."""
+    current = st.session_state.get("menu_position", "left")
+    if current not in _MENU_POSITION_LABELS:
+        current = "left"
+    values = list(_MENU_POSITION_LABELS)
+    choice = st.selectbox(
+        "Menu position",
+        values,
+        index=values.index(current),
+        format_func=_MENU_POSITION_LABELS.get,
+        key="menu_position_choice",
+        help="Where the page menu appears. The menu never collapses; this "
+        "choice is remembered on this computer (it contains no student data).",
+    )
+    if choice != current:
+        st.session_state["menu_position"] = choice
+        storage.save_ui_prefs(
+            {**storage.load_ui_prefs(), "menu_position": choice}
+        )
+        st.rerun()

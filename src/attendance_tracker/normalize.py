@@ -149,6 +149,23 @@ def build_students(
     return out.reset_index(drop=True), warnings
 
 
+def _drop_future_dates(out: pd.DataFrame, warnings: list[str]) -> pd.DataFrame:
+    """Drop marks dated after today — SIS systems allow pre-scheduled absences
+    and activities, and a mark that hasn't happened yet must not count as an
+    absence taken. Analysis always runs from the first day through today."""
+    today = pd.Timestamp.today().normalize()
+    future = out["date"] > today
+    if future.any():
+        last = out.loc[future, "date"].max()
+        warnings.append(
+            f"Ignored {int(future.sum())} future-dated mark(s) (through "
+            f"{last:%m/%d/%Y}) — pre-scheduled absences or activities that "
+            "haven't happened yet. Analysis runs through today."
+        )
+        out = out.loc[~future]
+    return out
+
+
 def build_events(
     frame: pd.DataFrame, mapping: ColumnMapping, code_map: CodeMap
 ) -> tuple[pd.DataFrame, list[str]]:
@@ -194,6 +211,7 @@ def build_events(
             f"Dropped {int(bad_dates.sum())} row(s) with unparseable dates."
         )
         out = out.loc[~bad_dates]
+    out = _drop_future_dates(out, warnings)
 
     return out.reset_index(drop=True), warnings
 
@@ -201,6 +219,22 @@ def build_events(
 #: Leading date token of strings like '08/07/2026 (D2S)' — ATP201 date cells
 #: carry a schedule-type suffix that must not reach the date parser.
 _DATE_PREFIX_RE = r"^\s*([0-9][0-9/\-\.]*)"
+
+
+def report_dates(frame: pd.DataFrame, mapping: ColumnMapping) -> pd.DatetimeIndex:
+    """Sorted distinct calendar dates appearing in a report's date column.
+
+    In a schoolwide exception report, every school day has at least one mark
+    from someone in the school, so the count of these dates doubles as the
+    number of school days elapsed. Schedule-type suffixes like
+    '08/07/2026 (D2S)' are stripped; unparseable cells are ignored.
+    """
+    column = mapping.columns.get("date")
+    if column is None or column not in frame.columns:
+        return pd.DatetimeIndex([])
+    text = frame[column].astype("string").str.extract(_DATE_PREFIX_RE)[0]
+    dates = pd.to_datetime(text, errors="coerce").dropna().dt.normalize()
+    return pd.DatetimeIndex(sorted(dates.unique()))
 
 
 def build_events_wide(
@@ -272,6 +306,7 @@ def build_events_wide(
             f"Dropped {int(bad_dates.sum())} row(s) with unparseable dates."
         )
         out = out.loc[~bad_dates]
+    out = _drop_future_dates(out, warnings)
 
     return out.sort_values(["student_id", "date"]).reset_index(drop=True), warnings
 

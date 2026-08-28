@@ -23,11 +23,34 @@ from .codes import code_map_from_json, code_map_to_json
 PROFILE_VERSION = 1
 PROFILE_FILENAME = "profile.json"
 FILE_SLOTS = ("caseload", "report", "course")
+UI_PREFS_FILENAME = "ui_prefs.json"
 
 
 def default_dir() -> Path:
     """The save location: local_data/ under the app's working directory."""
     return Path.cwd() / "local_data"
+
+
+def load_ui_prefs(directory: Path | None = None) -> dict:
+    """UI preferences (menu position, …) — settings only, never student data.
+
+    Kept separate from the profile so they survive "Forget saved data" and
+    exist even when the user never opts into remembering uploads.
+    """
+    directory = default_dir() if directory is None else Path(directory)
+    try:
+        data = json.loads((directory / UI_PREFS_FILENAME).read_text("utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_ui_prefs(prefs: dict, directory: Path | None = None) -> None:
+    directory = default_dir() if directory is None else Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / UI_PREFS_FILENAME).write_text(
+        json.dumps(prefs, indent=2), "utf-8"
+    )
 
 
 @dataclass
