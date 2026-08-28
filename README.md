@@ -30,7 +30,8 @@ This tool is designed for sensitive student data:
   like any file containing student data, and use **"Forget saved data"** in Upload & Setup to
   erase it at any time. The settings file itself contains no student information.
 - You can also save a small **code-mapping JSON** (which attendance codes mean
-  absent/tardy/etc.). It contains no student data.
+  absent/tardy/etc.). It contains no student data. Appearance choices (like the menu
+  position) live in a tiny settings file in the same folder — also no student data.
 - The repo's `.gitignore` blocks all `*.csv` / `*.xlsx` files so real exports can't be
   committed by accident.
 
@@ -138,6 +139,10 @@ setup unlocks the by-course, by-teacher, and by-counselor breakdowns.
    lists anyone unmatched (with hints, e.g. leading-zero ID mismatches).
 5. Explore the **Overview**, **Student**, **Cohorts**, and **Patterns** pages. Watch-list and
    per-student summaries can be downloaded as CSV.
+
+The page menu is pinned — it can't be collapsed away. Prefer it somewhere else? **Menu
+position** at the bottom of Upload & Setup moves it (left, top, bottom, or right) and
+remembers your choice on this computer.
 
 A per-student **summary-style** report (totals only, no dates) still powers the watch-list,
 tiers, and cohort comparisons — the time-based charts explain what they need and stay hidden.

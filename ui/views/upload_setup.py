@@ -935,7 +935,7 @@ def render() -> None:
     )
     if state.bundle() is not None:
         st.success(
-            "Setup is complete — the analysis pages are in the sidebar. "
+            "Setup is complete — the analysis pages are in the menu. "
             "Upload a different file below at any time."
         )
     if _caseload_section():
@@ -967,3 +967,35 @@ def render() -> None:
                 st.session_state["suppress_autoload"] = True
                 st.session_state.pop("loaded_from_profile", None)
                 st.rerun()
+    _menu_position_control()
+
+
+_MENU_POSITION_LABELS = {
+    "left": "Left (default)",
+    "top": "Top",
+    "bottom": "Bottom",
+    "right": "Right",
+}
+
+
+def _menu_position_control() -> None:
+    """Where the page menu lives; the choice is remembered on this computer."""
+    current = st.session_state.get("menu_position", "left")
+    if current not in _MENU_POSITION_LABELS:
+        current = "left"
+    values = list(_MENU_POSITION_LABELS)
+    choice = st.selectbox(
+        "Menu position",
+        values,
+        index=values.index(current),
+        format_func=_MENU_POSITION_LABELS.get,
+        key="menu_position_choice",
+        help="Where the page menu appears. The menu never collapses; this "
+        "choice is remembered on this computer (it contains no student data).",
+    )
+    if choice != current:
+        st.session_state["menu_position"] = choice
+        storage.save_ui_prefs(
+            {**storage.load_ui_prefs(), "menu_position": choice}
+        )
+        st.rerun()
