@@ -1,0 +1,62 @@
+# Builds the browser-only (stlite) version of the app and publishes it to
+# GitHub Pages at https://eseqko.github.io/attendancetracker/
+#
+# One-time setup after merging: repo Settings → Pages → Source: "GitHub Actions".
+#
+# The deployed page contains only the app's source code — never any student
+# data (sample .xlsx/.csv files are gitignored and not part of the build).
+# Assets are fully vendored so the page works on school networks that block
+# public CDNs, and 404.html (a copy of the app page) catches reloads on
+# navigation paths like /attendancetracker/overview.
+
+name: Deploy web app to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app.py
+      - ui/**
+      - src/**
+      - scripts/build_webapp.py
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache vendored downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/webapp-vendor
+          key: webapp-vendor-${{ hashFiles('scripts/build_webapp.py') }}
+      - name: Build the browser app (vendored assets)
+        run: python scripts/build_webapp.py --vendor --cache-dir ~/.cache/webapp-vendor
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: webapp
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -59,6 +59,23 @@ and finishes it automatically. Re-running the installer is always safe too — c
 window first — and rebuilds the environment from scratch, fixing any half-updated setup.
 Your saved data (`local_data/`) is never touched.
 
+## Chromebooks: the browser version (no install)
+
+The tracker also runs **entirely inside a browser tab** — the whole app, including Python,
+executes in the browser via WebAssembly ([stlite](https://github.com/whitphx/stlite)). Nothing
+to install, works on managed Chromebooks, and the privacy promise is structural: there is no
+server, so uploaded files are analyzed on the device and **cannot** be sent anywhere. The page
+itself is public like any website, but it contains only the app's code — never student data.
+
+- Built by `scripts/build_webapp.py` into `webapp/` (`--vendor` bundles every asset locally so
+  the page works on school networks that block public CDNs).
+- Deployed automatically to **GitHub Pages** by `.github/workflows/pages.yml` on every push to
+  `main` → https://eseqko.github.io/attendancetracker/ (one-time setup: repo Settings → Pages →
+  Source: "GitHub Actions").
+- Trade-offs vs. the installed version: the first visit downloads ~85 MB (a minute or two on
+  school Wi‑Fi; ~15 seconds after that), and nothing is saved between visits — closing or
+  reloading the tab starts fresh, so keep the two export files handy each session.
+
 ## Setup (command line)
 
 ```bash

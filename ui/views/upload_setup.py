@@ -4,6 +4,8 @@ ones. All data stays in session state."""
 
 from __future__ import annotations
 
+import sys
+
 import pandas as pd
 import streamlit as st
 
@@ -943,11 +945,21 @@ def restore_saved_setup() -> bool:
 
 def render() -> None:
     st.title("Upload & Setup")
-    st.caption(
-        "Everything runs locally and nothing is ever sent anywhere. Data "
-        "stays in memory unless you choose 'Remember on this computer', "
-        "which keeps a local copy you can erase with 'Forget saved data'."
-    )
+    if sys.platform == "emscripten":
+        # Browser (stlite) build: same privacy promise, different mechanics.
+        st.caption(
+            "This page contains only the app — no student data. Files you "
+            "upload are opened and analyzed entirely inside your browser on "
+            "this computer; nothing is ever sent to any server, and the site "
+            "cannot see your data. Closing or reloading the tab erases "
+            "everything, so keep your caseload and report files handy."
+        )
+    else:
+        st.caption(
+            "Everything runs locally and nothing is ever sent anywhere. Data "
+            "stays in memory unless you choose 'Remember on this computer', "
+            "which keeps a local copy you can erase with 'Forget saved data'."
+        )
     if state.bundle() is not None:
         st.success(
             "Setup is complete — the analysis pages are in the menu. "

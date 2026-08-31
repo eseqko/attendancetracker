@@ -214,14 +214,24 @@ PAGE_TEMPLATE = """\
   @keyframes spin { to { transform: rotate(360deg); } }
   #boot-note p { margin: 0; font-size: 15px; }
   #boot-note small { color: #6e6e73; }
+  #boot-note .privacy {
+    max-width: 34rem; text-align: center; line-height: 1.5;
+    color: #6e6e73; font-size: 13px; padding: 0 1.5rem;
+  }
 </style>
 </head>
 <body>
 <div id="boot-note">
   <div class="spin"></div>
-  <p>Loading the tracker &mdash; first load takes a minute.</p>
-  <small>Everything runs inside this tab; your files never leave this
-  computer.</small>
+  <p>Loading the Attendance Tracker&hellip;</p>
+  <small>The first visit downloads the app (about 85&nbsp;MB) and can take a
+  minute or two on school Wi&#8209;Fi; after that it starts in seconds.</small>
+  <p class="privacy">This page is public like any website, but it contains
+  only the app &mdash; no student data. Files you upload are opened and
+  analyzed entirely inside your browser on this computer; nothing is ever
+  sent to any server, and the site cannot see your data. Closing or
+  reloading the tab erases everything, so keep your caseload and report
+  files handy.</p>
 </div>
 <div id="root"></div>
 <script>

@@ -110,6 +110,11 @@ if menu_position in ("left", "right"):
         st.caption(
             "Data stays on this computer and is never sent anywhere."
         )
+        if sys.platform == "emscripten":
+            st.caption(
+                "Browser version — nothing is saved between visits; "
+                "closing or reloading the tab starts fresh."
+            )
 
 st.navigation(
     pages,
