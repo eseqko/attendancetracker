@@ -1,4 +1,4 @@
-"""The district caseload template (Synergy QRY801-style) must work end-to-end.
+"""The caseload template layout must work end-to-end.
 
 Header row: Student Name | Perm ID | Ed-Fi ID | State ID | Legal Last Name |
 Legal First Name | Grade. 'Perm ID' is the ID that must drive matching — never

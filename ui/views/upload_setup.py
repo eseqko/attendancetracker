@@ -186,7 +186,7 @@ _CASELOAD_EXAMPLE_ROWS = [
 
 @st.cache_data
 def _caseload_template_bytes() -> bytes:
-    """A blank caseload template: the header row only, on the QRY801 sheet."""
+    """A blank caseload template: the header row only."""
     buffer = io.BytesIO()
     pd.DataFrame(columns=sample_data.CASELOAD_TEMPLATE_COLUMNS).to_excel(
         buffer, index=False, sheet_name=sample_data.CASELOAD_TEMPLATE_SHEET
@@ -198,8 +198,9 @@ def _caseload_format_help() -> None:
     """Answers 'what exactly should the columns say?' before the first upload."""
     with st.expander("What should the caseload file look like?"):
         st.markdown(
-            "One row per student, with this exact header row — the district's "
-            "**QRY801** caseload export already matches it:"
+            "One row per student, with this exact header row. Any spreadsheet "
+            "laid out like this works — build it yourself or export it from "
+            "your SIS; there is no special report to run:"
         )
         example = pd.DataFrame(
             _CASELOAD_EXAMPLE_ROWS, columns=sample_data.CASELOAD_TEMPLATE_COLUMNS

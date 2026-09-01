@@ -223,15 +223,15 @@ def _full_name(roster: pd.DataFrame) -> pd.Series:
     return roster["last_name"] + ", " + roster["first_name"]
 
 
-#: Header row of the district caseload template (Synergy QRY801-style export).
-#: 'Perm ID' is the SIS-local student ID that attendance reports key on;
-#: 'Ed-Fi ID' and 'State ID' are other ID systems and must NOT be used for
-#: matching by default.
+#: Header row of the caseload template (the layout of the case manager's own
+#: student list — not a named SIS report). 'Perm ID' is the SIS-local student
+#: ID that attendance reports key on; 'Ed-Fi ID' and 'State ID' are other ID
+#: systems and must NOT be used for matching by default.
 CASELOAD_TEMPLATE_COLUMNS = [
     "Student Name", "Perm ID", "Ed-Fi ID", "State ID",
     "Legal Last Name", "Legal First Name", "Grade",
 ]
-CASELOAD_TEMPLATE_SHEET = "QRY801"
+CASELOAD_TEMPLATE_SHEET = "Caseload"
 
 
 def render_caseload_template(roster: pd.DataFrame) -> pd.DataFrame:
