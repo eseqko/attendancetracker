@@ -361,6 +361,16 @@ def vendor_assets(cache: Path) -> None:
                     shutil.move(str(item), target)
     else:
         print("  pyodide core already vendored")
+    # The Pyodide bundle ships command-line launchers the browser never
+    # uses; python.exe in particular makes Firebase Hosting's free plan
+    # reject the whole deploy ("Executable files are forbidden"). Strip
+    # them unconditionally so existing vendor dirs self-heal too.
+    for name in ("python.exe", "python.bat", "python", "python_cli_entry.mjs",
+                 "ffi.d.ts", "pyodide.d.ts"):
+        target = pyodide_dir / name
+        if target.exists():
+            target.unlink()
+            print(f"  stripped non-browser file: {name}")
 
     # 3. Lockfile + the wasm/pure wheels the app needs from the recipes
     #    bundle (dependency closure only — not all 400MB of packages).
