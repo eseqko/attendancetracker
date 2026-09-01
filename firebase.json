@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "public": "webapp",
+    "ignore": ["**/vendor/_cache/**", "**/.*", "**/*.exe", "**/*.bat"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}

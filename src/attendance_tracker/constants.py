@@ -148,6 +148,11 @@ DEFAULT_CODE_MAP: dict[str, Category] = {
     "UNV": Category.ABSENT_UNEXCUSED,
     "ABS": Category.ABSENT_UNEXCUSED,
     "TRU": Category.ABSENT_UNEXCUSED,
+    # "Cut" = the student cut class: an unexcused absence (district feedback).
+    "CUT": Category.ABSENT_UNEXCUSED,
+    "CUTS": Category.ABSENT_UNEXCUSED,
+    "CLASS CUT": Category.ABSENT_UNEXCUSED,
+    "CUT CLASS": Category.ABSENT_UNEXCUSED,
     "OSS": Category.ABSENT_UNEXCUSED,
     "SUS": Category.ABSENT_UNEXCUSED,
     "ISS": Category.ABSENT_UNEXCUSED,
