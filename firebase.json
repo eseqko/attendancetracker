@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "public": "webapp",
+    "ignore": ["**/vendor/_cache/**", "**/.*"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}
