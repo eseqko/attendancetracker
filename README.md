@@ -95,8 +95,9 @@ Your browser opens the app. Start on **Upload & Setup**.
 
 ## Caseload file format
 
-Use the district caseload template: an Excel file whose **first row is the header row** with
-these fields:
+Your caseload is your own list of students — there is no special SIS report to run. Use a
+CSV or Excel file whose **first row is the header row** with these fields (the app offers a
+blank template download in the setup wizard):
 
 | # | Header field | What the tracker does with it |
 |---|--------------|-------------------------------|
