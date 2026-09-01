@@ -51,7 +51,16 @@ echo ^(~430 MB^) and can take a while. Please leave this window open...
 
 echo.
 echo Signing in to Firebase - a browser window may open the first time...
-call npx -y firebase-tools@latest login || goto :fail
+call npx -y firebase-tools@latest login:list 2>nul | find "@" >nul
+if errorlevel 1 (
+    call npx -y firebase-tools@latest login
+    rem The login helper can crash on exit AFTER succeeding (a known Node
+    rem bug on Windows) - judge by the signed-in state, not the exit code.
+    call npx -y firebase-tools@latest login:list 2>nul | find "@" >nul
+    if errorlevel 1 goto :fail
+) else (
+    echo Already signed in.
+)
 
 echo.
 echo Deploying ^(~73 MB upload^)...
