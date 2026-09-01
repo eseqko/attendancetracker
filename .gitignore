@@ -28,3 +28,7 @@ local_data/
 .idea/
 .vscode/
 webapp/vendor/
+
+# Firebase: per-user project binding and CLI caches
+.firebaserc
+.firebase/

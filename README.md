@@ -75,11 +75,12 @@ itself is public like any website, but it contains only the app's code — never
 - Trade-offs vs. the installed version: the first visit downloads ~85 MB (a minute or two on
   school Wi‑Fi; ~15 seconds after that), and nothing is saved between visits — closing or
   reloading the tab starts fresh, so keep the two export files handy each session.
-- **If your network blocks `github.io`**: the same folder deploys to Firebase Hosting
-  (`firebase.json` is included; serves from a `*.web.app` Google domain). Build with
-  `python scripts/build_webapp.py --vendor`, then `firebase deploy --only hosting` from a
-  machine with the [Firebase CLI](https://firebase.google.com/docs/cli) signed in to a free
-  Firebase project.
+- **If your network blocks `github.io`**: the same folder deploys to Firebase Hosting, which
+  serves from a `*.web.app` Google domain. Create a free project at
+  console.firebase.google.com, then double-click **`deploy_web.bat`** (Windows) — it installs
+  what it needs, asks for your Project ID once, builds, signs in, and publishes. Command-line
+  route: `python scripts/build_webapp.py --vendor` then `firebase deploy --only hosting`
+  with the [Firebase CLI](https://firebase.google.com/docs/cli).
 
 ## Setup (command line)
 
