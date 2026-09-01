@@ -4,12 +4,14 @@ ones. All data stays in session state."""
 
 from __future__ import annotations
 
+import io
 import sys
 
 import pandas as pd
 import streamlit as st
 
 from attendance_tracker import codes as codes_mod
+from attendance_tracker import sample_data
 from attendance_tracker import (
     detection,
     io_utils,
@@ -174,6 +176,53 @@ def _role_selectbox(
 # ---------------------------------------------------------------------------
 
 
+#: Obviously made-up rows for the in-app example of the caseload format.
+_CASELOAD_EXAMPLE_ROWS = [
+    ("Example, Ana", "900001", "99000001", "1099000001", "Example", "Ana", "09"),
+    ("Sample, Ben", "900002", "99000002", "1099000002", "Sample", "Ben", "10"),
+    ("Placeholder, Cy", "900003", "99000003", "1099000003", "Placeholder", "Cy", "11"),
+]
+
+
+@st.cache_data
+def _caseload_template_bytes() -> bytes:
+    """A blank caseload template: the header row only, on the QRY801 sheet."""
+    buffer = io.BytesIO()
+    pd.DataFrame(columns=sample_data.CASELOAD_TEMPLATE_COLUMNS).to_excel(
+        buffer, index=False, sheet_name=sample_data.CASELOAD_TEMPLATE_SHEET
+    )
+    return buffer.getvalue()
+
+
+def _caseload_format_help() -> None:
+    """Answers 'what exactly should the columns say?' before the first upload."""
+    with st.expander("What should the caseload file look like?"):
+        st.markdown(
+            "One row per student, with this exact header row — the district's "
+            "**QRY801** caseload export already matches it:"
+        )
+        example = pd.DataFrame(
+            _CASELOAD_EXAMPLE_ROWS, columns=sample_data.CASELOAD_TEMPLATE_COLUMNS
+        )
+        st.dataframe(example, hide_index=True)
+        st.markdown(
+            "- **Perm ID** is the only required column — it must be the same "
+            "student ID your attendance report uses.\n"
+            "- **Grade** powers the by-grade comparisons; the name columns give "
+            "you names instead of IDs.\n"
+            "- Ed-Fi ID and State ID are kept for reference only, and any extra "
+            "columns you add become group-by options.\n"
+            "- The rows above are made-up examples, not real students."
+        )
+        st.download_button(
+            "Download a blank template (Excel)",
+            data=_caseload_template_bytes(),
+            file_name="caseload_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="caseload_template_download",
+        )
+
+
 def _caseload_section() -> bool:
     st.subheader("1 · Your caseload")
     done = state.get_setup("caseload_done", False)
@@ -201,6 +250,7 @@ def _caseload_section() -> bool:
             "will be analyzed — the schoolwide report is filtered down to them.",
             icon="👥",
         )
+        _caseload_format_help()
         return False
 
     sheet, override = _sheet_and_header("caseload", data, filename)

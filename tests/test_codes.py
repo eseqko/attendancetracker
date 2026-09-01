@@ -89,3 +89,15 @@ def test_from_json_normalizes_codes_on_load():
     text = json.dumps({"version": 1, "codes": {" a ": "absent_unexcused"}})
     restored = code_map_from_json(text)
     assert restored.codes == {"A": Category.ABSENT_UNEXCUSED}
+
+
+def test_cut_is_an_unexcused_absence():
+    """District feedback: 'CUT' means the student cut class — unexcused."""
+    from attendance_tracker import codes as codes_mod
+    from attendance_tracker.constants import Category
+
+    code_map = codes_mod.propose_code_map({"CUT": 4, "cut": 1, "Class Cut": 2})
+    assert code_map.category_for("CUT") is Category.ABSENT_UNEXCUSED
+    assert code_map.category_for("cut") is Category.ABSENT_UNEXCUSED
+    assert code_map.category_for("Class Cut") is Category.ABSENT_UNEXCUSED
+    assert codes_mod.unknown_codes(code_map, {"CUT": 4}) == []
