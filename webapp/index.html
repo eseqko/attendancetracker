@@ -61,7 +61,7 @@
     entrypoint: "web_main.py",
     files: APP_FILES,
     requirements,
-    streamlitConfig: {"theme.base": "light", "theme.primaryColor": "#0071e3", "theme.backgroundColor": "#ffffff", "theme.secondaryBackgroundColor": "#f5f5f7", "theme.textColor": "#1d1d1f", "client.toolbarMode": "viewer", "client.showErrorDetails": "full"},
+    streamlitConfig: {"theme.base": "light", "theme.primaryColor": "#0071e3", "theme.backgroundColor": "#ffffff", "theme.secondaryBackgroundColor": "#f5f5f7", "theme.textColor": "#1d1d1f", "client.toolbarMode": "viewer", "client.showErrorDetails": "full", "browser.gatherUsageStats": false},
   };
   options.pyodideUrl = abs("./vendor/pyodide/pyodide.mjs");
 

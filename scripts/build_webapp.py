@@ -139,6 +139,9 @@ STREAMLIT_CONFIG = {
     "theme.textColor": "#1d1d1f",
     "client.toolbarMode": "viewer",
     "client.showErrorDetails": "full",
+    # The native app turns Streamlit's usage telemetry off in
+    # .streamlit/config.toml; stlite ignores that file, so repeat it here.
+    "browser.gatherUsageStats": False,
 }
 
 WEB_MAIN = '''\
